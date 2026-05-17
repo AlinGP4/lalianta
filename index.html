@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>La Lianta — Bar & Vinos · Betxí</title>
+<meta name="description" content="La Lianta — bar y discoteca en Betxí. Vinos, cócteles de autor, música en vivo y noches a recordar." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Manrope:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================================================
+     AGE GATE
+============================================================ -->
+<div class="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-gate-title">
+  <div class="age-gate__inner">
+    <div class="age-gate__monogram">L</div>
+    <h2 id="age-gate-title">Antes de entrar.</h2>
+    <p>Para acceder a La Lianta debes ser mayor de edad. Por favor confírmanos que tienes 18 años o más.</p>
+    <div class="age-gate__actions">
+      <button class="btn btn--cream" data-age-enter>
+        Sí, soy mayor de 18
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="age-gate__rule">disfruta con moderación</div>
+    <a href="#" data-age-decline class="age-gate__decline">Soy menor de edad</a>
+  </div>
+</div>
+
+<!-- ============================================================
+     NAV
+============================================================ -->
+<nav class="nav" aria-label="Principal">
+  <a href="#top" class="nav__brand">
+    <span class="nav__brand-mark">L</span>
+    <span>La&nbsp;Lianta</span>
+  </a>
+  <ul class="nav__links">
+    <li><a href="#sobre">Sobre</a></li>
+    <li><a href="#carta">La Carta</a></li>
+    <li><a href="#agenda">Agenda</a></li>
+    <li><a href="#galeria">Galería</a></li>
+    <li><a href="#contacto">Contacto</a></li>
+  </ul>
+  <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" class="nav__cta">
+    @laliantabetxi
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17L17 7M17 7H8M17 7V16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </a>
+  <button class="nav__toggle" aria-label="Menú">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- ============================================================
+     HERO
+============================================================ -->
+<header id="top" class="hero">
+  <div class="hero__floats" aria-hidden="true">
+    <!-- Wine glass -->
+    <svg class="float-glass" data-parallax="-0.05" viewBox="0 0 60 90" fill="none" stroke="#C9A24E" stroke-width="1.2">
+      <path d="M18 8h24l-2 18c-1 8-5 14-10 14s-9-6-10-14L18 8z"/>
+      <path d="M22 16c4 2 12 2 16 0" stroke-width="1"/>
+      <path d="M30 40v32M22 76h16"/>
+    </svg>
+    <!-- Music note -->
+    <svg class="float-note" data-parallax="0.08" viewBox="0 0 40 60" fill="none" stroke="#1A1A3E" stroke-width="1.4">
+      <path d="M16 50V14l16-4v32"/>
+      <ellipse cx="12" cy="50" rx="6" ry="4" transform="rotate(-12 12 50)"/>
+      <ellipse cx="28" cy="42" rx="6" ry="4" transform="rotate(-12 28 42)"/>
+    </svg>
+    <!-- Bottle -->
+    <svg class="float-bottle" data-parallax="-0.08" viewBox="0 0 40 90" fill="none" stroke="#1A1A3E" stroke-width="1.2">
+      <path d="M16 4h8v18c0 4 6 6 6 14v44a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6V36c0-8 6-10 6-14V4z"/>
+      <rect x="11" y="48" width="18" height="14" fill="none" stroke="#C9A24E"/>
+    </svg>
+    <!-- Star -->
+    <svg class="float-star" data-parallax="0.12" viewBox="0 0 24 24" fill="#C9A24E">
+      <path d="M12 2l1.6 7.5L21 11l-7.4 1.5L12 20l-1.6-7.5L3 11l7.4-1.5L12 2z"/>
+    </svg>
+    <!-- Small note -->
+    <svg class="float-note-2" data-parallax="0.06" viewBox="0 0 40 60" fill="none" stroke="#C9A24E" stroke-width="1.2">
+      <path d="M14 50V18l12-4v28"/>
+      <ellipse cx="10" cy="50" rx="5" ry="3.5" transform="rotate(-12 10 50)"/>
+      <ellipse cx="22" cy="42" rx="5" ry="3.5" transform="rotate(-12 22 42)"/>
+    </svg>
+  </div>
+
+  <div class="container hero__inner">
+    <div class="hero__copy reveal">
+      <div class="hero__est">Bar · Vinos · Música — Betxí</div>
+      <h1 class="hero__title">
+        <span class="hero__title-row">La</span>
+        <span class="hero__title-row hero__title-row--accent">Lianta</span>
+      </h1>
+      <p class="hero__tagline">Donde la noche se sirve despacio y el día se queda un rato más.</p>
+      <p class="hero__lead">Un bar para los que entienden que un buen vino, una conversación larga y la música justa pueden cambiarte la semana entera.</p>
+      <div class="hero__cta">
+        <a href="#carta" class="btn btn--gold">
+          Descubre la carta
+          <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 12h14M13 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" class="btn btn--ghost">
+          Síguenos en Instagram
+        </a>
+      </div>
+    </div>
+
+    <div class="hero__mascot reveal" data-delay="1">
+      <div class="hero__mascot-bg" data-parallax="0.04"></div>
+      <img src="assets/logo-mascot.png" alt="La Lianta — ilustración de la mascota: mujer sofisticada con gafas de sol sosteniendo una copa de vino" />
+    </div>
+  </div>
+
+  <div class="hero__marquee" aria-hidden="true">
+    <div class="hero__marquee-track">
+      <span>Vinos de autor <i class="dot"></i> Cócteles de autor <i class="dot"></i> Música en vivo <i class="dot"></i> Buen ambiente <i class="dot"></i> Desde 2022 <i class="dot"></i></span>
+      <span>Vinos de autor <i class="dot"></i> Cócteles de autor <i class="dot"></i> Música en vivo <i class="dot"></i> Buen ambiente <i class="dot"></i> Desde 2022 <i class="dot"></i></span>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================
+     SOBRE / QUÉ OFRECEMOS
+============================================================ -->
+<section id="sobre" class="about">
+  <div class="container">
+    <div class="about__lede">
+      <div class="reveal">
+        <div class="eyebrow">Sobre La Lianta</div>
+        <h2>Una casa para los que vienen a quedarse.</h2>
+      </div>
+      <div class="reveal" data-delay="1">
+        <p>Abrimos La Lianta porque echábamos de menos los bares que no pretenden ser otra cosa: una barra honesta, vinos elegidos con criterio, cócteles que importan y música que acompaña sin gritar.</p>
+        <p>Aquí no hay carta cerrada ni horario para irse pronto. Se viene a tomar algo bueno, a hablar con quien tienes delante y a quedarte un rato más. Eso es todo —y es bastante.</p>
+      </div>
+    </div>
+
+    <div class="feature-grid">
+      <article class="feature reveal" data-delay="1">
+        <div class="feature__num">01 — Selección</div>
+        <svg class="feature__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M16 6h16l-1 14c-.5 5-3 8-7 8s-6.5-3-7-8L16 6z"/>
+          <path d="M24 28v14M18 42h12"/>
+        </svg>
+        <h3>Vinos &amp; Licores</h3>
+        <p>Más de 80 referencias entre tintos, blancos, vermuts y destilados. De la garnacha local al whisky single malt.</p>
+      </article>
+
+      <article class="feature reveal" data-delay="2">
+        <div class="feature__num">02 — Frescor</div>
+        <svg class="feature__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+          <rect x="14" y="6" width="20" height="36" rx="3"/>
+          <path d="M14 14h20M14 22h20M14 30h20"/>
+        </svg>
+        <h3>Cervezas del Mundo</h3>
+        <p>Tirador siempre fría y selección de importación. De la Estrella de toda la vida a una IPA artesana de la comarca.</p>
+      </article>
+
+      <article class="feature reveal" data-delay="3">
+        <div class="feature__num">03 — Sonido</div>
+        <svg class="feature__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M20 38V14l16-4v24"/>
+          <ellipse cx="14" cy="38" rx="6" ry="4"/>
+          <ellipse cx="30" cy="34" rx="6" ry="4"/>
+        </svg>
+        <h3>Música en Vivo</h3>
+        <p>DJ residentes los viernes y sábados, sesiones de vinilo entre semana y bolos acústicos un domingo al mes.</p>
+      </article>
+
+      <article class="feature reveal" data-delay="4">
+        <div class="feature__num">04 — Ambiente</div>
+        <svg class="feature__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+          <circle cx="16" cy="20" r="6"/>
+          <circle cx="32" cy="20" r="6"/>
+          <path d="M8 40c1-6 5-9 8-9s7 3 8 9M24 40c1-6 5-9 8-9s7 3 8 9"/>
+        </svg>
+        <h3>Gente Buena</h3>
+        <p>El bar lo hace su gente. Ven con quien quieras: probablemente acabes en otra mesa con caras nuevas.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CARTA / BEBIDAS
+============================================================ -->
+<section id="carta" class="menu">
+  <div class="container">
+    <div class="menu__head">
+      <div class="reveal">
+        <div class="eyebrow">La Carta</div>
+        <h2>Bebidas escogidas, sin medias tintas.</h2>
+      </div>
+      <p class="reveal" data-delay="1">Hemos pasado meses catando, descartando y volviendo a empezar. Lo que entra en la barra entra porque está bueno. Punto. Pregúntale al equipo si dudas: lo hemos probado todo antes que tú.</p>
+    </div>
+
+    <div class="menu__tabs reveal">
+      <button class="menu__tab is-active" data-tab="vinos">Vinos &amp; Vermut</button>
+      <button class="menu__tab" data-tab="whisky">Whisky</button>
+      <button class="menu__tab" data-tab="gin">Gin</button>
+      <button class="menu__tab" data-tab="ron">Ron</button>
+      <button class="menu__tab" data-tab="vodka">Vodka</button>
+      <button class="menu__tab" data-tab="cervezas">Cervezas</button>
+      <button class="menu__tab" data-tab="cocteles">Cócteles</button>
+    </div>
+
+    <!-- VINOS -->
+    <div class="menu__panel is-active" data-panel="vinos">
+      <div class="menu__category-head reveal">
+        <h3>Vinos &amp; Vermut</h3>
+        <p>De la garnacha vieja del Maestrat al cava de pequeño productor. Carta corta, todo abierto por copa.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Tinto Reserva <em>D.O. Rioja · Tempranillo</em></div><div class="menu__item-tag">Tinto</div></div>
+        <div class="menu__item"><div class="menu__item-name">Garnacha del Maestrat <em>Vino de la tierra · Castellón</em></div><div class="menu__item-tag">Tinto</div></div>
+        <div class="menu__item"><div class="menu__item-name">Albariño Atlántico <em>D.O. Rías Baixas</em></div><div class="menu__item-tag">Blanco</div></div>
+        <div class="menu__item"><div class="menu__item-name">Verdejo de Rueda <em>Vendimia nocturna</em></div><div class="menu__item-tag">Blanco</div></div>
+        <div class="menu__item"><div class="menu__item-name">Rosado de Bobal <em>Manchuela · ecológico</em></div><div class="menu__item-tag">Rosado</div></div>
+        <div class="menu__item"><div class="menu__item-name">Cava Brut Nature <em>Penedès · reserva 24m</em></div><div class="menu__item-tag">Espumoso</div></div>
+        <div class="menu__item"><div class="menu__item-name">Champagne Brut <em>Champagne · pequeño productor</em></div><div class="menu__item-tag">Espumoso</div></div>
+        <div class="menu__item"><div class="menu__item-name">Vermut Rojo de la Casa <em>Reposado en bodega · receta propia</em></div><div class="menu__item-tag">Vermut</div></div>
+        <div class="menu__item"><div class="menu__item-name">Vermut Blanco Seco <em>De aperitivo · servido frío</em></div><div class="menu__item-tag">Vermut</div></div>
+        <div class="menu__item"><div class="menu__item-name">Vino de la Casa <em>Pregunta al equipo · cambia cada semana</em></div><div class="menu__item-tag">Sorpréndete</div></div>
+      </div>
+    </div>
+
+    <!-- WHISKY -->
+    <div class="menu__panel" data-panel="whisky">
+      <div class="menu__category-head reveal">
+        <h3>Whisky</h3>
+        <p>Bourbon, single malt y un par de blends que merecen mucho la pena. Sin hielo, con uno o solo: tú decides.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Jack Daniel's Old N°7 <em>Tennessee · 40%</em></div><div class="menu__item-tag">Bourbon</div></div>
+        <div class="menu__item"><div class="menu__item-name">Bulleit Bourbon <em>Kentucky · alto en centeno</em></div><div class="menu__item-tag">Bourbon</div></div>
+        <div class="menu__item"><div class="menu__item-name">Johnnie Walker Black 12 <em>Blended Scotch</em></div><div class="menu__item-tag">Blend</div></div>
+        <div class="menu__item"><div class="menu__item-name">Chivas Regal 12 <em>Speyside · blended</em></div><div class="menu__item-tag">Blend</div></div>
+        <div class="menu__item"><div class="menu__item-name">Glenfiddich 12 <em>Speyside single malt</em></div><div class="menu__item-tag">Single Malt</div></div>
+        <div class="menu__item"><div class="menu__item-name">The Macallan Double Cask 12 <em>Highlands single malt</em></div><div class="menu__item-tag">Single Malt</div></div>
+        <div class="menu__item"><div class="menu__item-name">Talisker 10 <em>Skye · turbado, marino</em></div><div class="menu__item-tag">Single Malt</div></div>
+        <div class="menu__item"><div class="menu__item-name">Jameson <em>Irish whiskey · triple destilado</em></div><div class="menu__item-tag">Irish</div></div>
+      </div>
+    </div>
+
+    <!-- GIN -->
+    <div class="menu__panel" data-panel="gin">
+      <div class="menu__category-head reveal">
+        <h3>Gin</h3>
+        <p>Botanicos, cítricos y mediterráneos. Si quieres un gin-tonic en condiciones, pregunta al equipo por el maridaje.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Bombay Sapphire <em>London Dry · floral</em></div><div class="menu__item-tag">London Dry</div></div>
+        <div class="menu__item"><div class="menu__item-name">Tanqueray N°10 <em>Cítrico premium</em></div><div class="menu__item-tag">London Dry</div></div>
+        <div class="menu__item"><div class="menu__item-name">Hendrick's <em>Pepino &amp; rosa de Damasco</em></div><div class="menu__item-tag">Premium</div></div>
+        <div class="menu__item"><div class="menu__item-name">Nordés Atlantic Galician Gin <em>Albariño &amp; botánicos gallegos</em></div><div class="menu__item-tag">Atlántico</div></div>
+        <div class="menu__item"><div class="menu__item-name">Gin Mare <em>Mediterráneo · albahaca, oliva, tomillo</em></div><div class="menu__item-tag">Mediterráneo</div></div>
+        <div class="menu__item"><div class="menu__item-name">Monkey 47 <em>Selva Negra · 47 botánicos</em></div><div class="menu__item-tag">Ultra Premium</div></div>
+      </div>
+    </div>
+
+    <!-- RON -->
+    <div class="menu__panel" data-panel="ron">
+      <div class="menu__category-head reveal">
+        <h3>Ron</h3>
+        <p>Del Caribe a Centroamérica. Ron blanco para mezclar, añejo para entender por qué la gente se enamora del ron.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Bacardí Carta Blanca <em>Cuba · ron blanco</em></div><div class="menu__item-tag">Blanco</div></div>
+        <div class="menu__item"><div class="menu__item-name">Havana Club Añejo 7 <em>Cuba · 7 años</em></div><div class="menu__item-tag">Añejo</div></div>
+        <div class="menu__item"><div class="menu__item-name">Brugal Añejo <em>República Dominicana</em></div><div class="menu__item-tag">Añejo</div></div>
+        <div class="menu__item"><div class="menu__item-name">Diplomático Reserva Exclusiva <em>Venezuela · 12 años</em></div><div class="menu__item-tag">Premium</div></div>
+        <div class="menu__item"><div class="menu__item-name">Zacapa 23 Solera <em>Guatemala · sistema solera</em></div><div class="menu__item-tag">Ultra Premium</div></div>
+        <div class="menu__item"><div class="menu__item-name">Flor de Caña 12 <em>Nicaragua · slow-aged</em></div><div class="menu__item-tag">Premium</div></div>
+      </div>
+    </div>
+
+    <!-- VODKA -->
+    <div class="menu__panel" data-panel="vodka">
+      <div class="menu__category-head reveal">
+        <h3>Vodka</h3>
+        <p>Servido tal como debe servirse: muy frío. Mejor solo, con lima o en un Martini limpio.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Absolut Original <em>Suecia · trigo</em></div><div class="menu__item-tag">Clásico</div></div>
+        <div class="menu__item"><div class="menu__item-name">Stolichnaya <em>Letonia · centeno</em></div><div class="menu__item-tag">Clásico</div></div>
+        <div class="menu__item"><div class="menu__item-name">Tito's Handmade Vodka <em>Texas · maíz</em></div><div class="menu__item-tag">Artesano</div></div>
+        <div class="menu__item"><div class="menu__item-name">Grey Goose <em>Francia · trigo invernal</em></div><div class="menu__item-tag">Premium</div></div>
+        <div class="menu__item"><div class="menu__item-name">Belvedere <em>Polonia · centeno dorado</em></div><div class="menu__item-tag">Premium</div></div>
+      </div>
+    </div>
+
+    <!-- CERVEZAS -->
+    <div class="menu__panel" data-panel="cervezas">
+      <div class="menu__category-head reveal">
+        <h3>Cervezas</h3>
+        <p>Tirador siempre limpio, vasos siempre fríos. Locales, nacionales y un par de importadas para cuando apetece variar.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Estrella Galicia Especial <em>Tirador · lager 5,5%</em></div><div class="menu__item-tag">Local</div></div>
+        <div class="menu__item"><div class="menu__item-name">Mahou Cinco Estrellas <em>Madrid · lager</em></div><div class="menu__item-tag">Nacional</div></div>
+        <div class="menu__item"><div class="menu__item-name">Alhambra Reserva 1925 <em>Granada · extra lager</em></div><div class="menu__item-tag">Premium</div></div>
+        <div class="menu__item"><div class="menu__item-name">Heineken <em>Países Bajos · lager</em></div><div class="menu__item-tag">Importada</div></div>
+        <div class="menu__item"><div class="menu__item-name">Birra Moretti <em>Italia · lager</em></div><div class="menu__item-tag">Importada</div></div>
+        <div class="menu__item"><div class="menu__item-name">Corona Extra <em>México · pale lager</em></div><div class="menu__item-tag">Importada</div></div>
+        <div class="menu__item"><div class="menu__item-name">Guinness Original <em>Irlanda · stout</em></div><div class="menu__item-tag">Stout</div></div>
+        <div class="menu__item"><div class="menu__item-name">IPA Artesana del Mes <em>Cervecería local · pregúntanos</em></div><div class="menu__item-tag">Artesana</div></div>
+      </div>
+    </div>
+
+    <!-- COCTELES -->
+    <div class="menu__panel" data-panel="cocteles">
+      <div class="menu__category-head reveal">
+        <h3>Cócteles de Autor</h3>
+        <p>Clásicos bien hechos y un par de creaciones nuestras. Si no encuentras tu copa, dilo: la inventamos.</p>
+      </div>
+      <div class="menu__list reveal" data-delay="1">
+        <div class="menu__item"><div class="menu__item-name">Negroni <em>Gin · Campari · vermut rojo</em></div><div class="menu__item-tag">Clásico</div></div>
+        <div class="menu__item"><div class="menu__item-name">Old Fashioned <em>Bourbon · azúcar · angostura</em></div><div class="menu__item-tag">Clásico</div></div>
+        <div class="menu__item"><div class="menu__item-name">Aperol Spritz <em>Aperol · cava · soda</em></div><div class="menu__item-tag">Aperitivo</div></div>
+        <div class="menu__item"><div class="menu__item-name">Espresso Martini <em>Vodka · café · licor de café</em></div><div class="menu__item-tag">After Dinner</div></div>
+        <div class="menu__item"><div class="menu__item-name">Mojito de la Casa <em>Ron añejo · menta · lima</em></div><div class="menu__item-tag">Refrescante</div></div>
+        <div class="menu__item"><div class="menu__item-name">Daiquiri de Fresa <em>Ron blanco · fresa de temporada</em></div><div class="menu__item-tag">Frutal</div></div>
+        <div class="menu__item"><div class="menu__item-name">Margarita Picante <em>Tequila · jalapeño · lima</em></div><div class="menu__item-tag">Atrévete</div></div>
+        <div class="menu__item"><div class="menu__item-name">Penicillin <em>Whisky · jengibre · miel · limón</em></div><div class="menu__item-tag">De Autor</div></div>
+        <div class="menu__item"><div class="menu__item-name">La Lianta <em>Receta secreta de la casa · pregunta</em></div><div class="menu__item-tag">Firma</div></div>
+        <div class="menu__item"><div class="menu__item-name">Gin-Tonic Maridado <em>Elige tu gin, lo emparejamos</em></div><div class="menu__item-tag">A medida</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     HORARIOS Y NOCHES
+============================================================ -->
+<section id="horarios" class="hours">
+  <div class="container hours__grid">
+    <div class="reveal">
+      <div class="eyebrow">Horarios</div>
+      <h2>Cuándo nos encontrarás abiertos.</h2>
+      <div class="hours__table">
+        <div class="hours__row"><span>Martes — Jueves</span><span>19:00 — 02:00</span></div>
+        <div class="hours__row"><span>Viernes</span><span>19:00 — 04:00</span></div>
+        <div class="hours__row"><span>Sábado</span><span>19:00 — 04:00</span></div>
+        <div class="hours__row"><span>Domingo</span><span>18:00 — 00:00</span></div>
+        <div class="hours__row closed"><span>Lunes</span><span>Cerrado</span></div>
+      </div>
+    </div>
+
+    <div class="reveal" data-delay="1">
+      <div class="eyebrow">Noches Especiales</div>
+      <h2 style="font-size: clamp(36px, 4.6vw, 56px); margin-bottom: 36px;">Cada noche, otra cosa.</h2>
+      <div class="nights">
+        <article class="night">
+          <div class="night__day">Jueves</div>
+          <h3>Vermut &amp; Vinilo</h3>
+          <p>Sesión de vinilo con vermut de la casa al 50% hasta medianoche. Para empezar la semana con calma.</p>
+        </article>
+        <article class="night">
+          <div class="night__day">Viernes</div>
+          <h3>DJ Live</h3>
+          <p>Sesiones house, soul y disco con nuestros residentes y un invitado distinto cada mes.</p>
+        </article>
+        <article class="night">
+          <div class="night__day">Sábado</div>
+          <h3>Noche Premium</h3>
+          <p>Carta ampliada de destilados premium, bartender takeover y la pista hasta las cuatro.</p>
+        </article>
+        <article class="night">
+          <div class="night__day">Domingo</div>
+          <h3>Tarde Tranquila</h3>
+          <p>Acústicos en vivo un domingo al mes, vinilos suaves el resto. La cura perfecta del fin de semana.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     AGENDA / PROXIMOS EVENTOS
+============================================================ -->
+<section id="agenda" class="events">
+  <div class="container">
+    <div class="menu__head" style="margin-bottom: 56px;">
+      <div class="reveal">
+        <div class="eyebrow">Próximos Eventos</div>
+        <h2>Agenda de la temporada.</h2>
+      </div>
+      <p class="reveal" data-delay="1">Estos son los planes que ya tenemos cerrados. Sigue nuestro Instagram para los avisos de última hora y los takeover que aún no podemos contar.</p>
+    </div>
+
+    <div class="events__list reveal">
+      <article class="event">
+        <div class="event__date">
+          <span class="event__date-day">22</span>
+          <span class="event__date-month">May · Viernes</span>
+        </div>
+        <div class="event__title">
+          Ona Mafalda <em>(DJ Set)</em>
+          <small>Selecciones house &amp; soul</small>
+        </div>
+        <div class="event__meta">
+          <b>23:00 — 03:00</b>
+          <span>Entrada libre con consumición</span>
+        </div>
+        <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" class="event__cta">Apuntarme</a>
+      </article>
+
+      <article class="event">
+        <div class="event__date">
+          <span class="event__date-day">23</span>
+          <span class="event__date-month">May · Sábado</span>
+        </div>
+        <div class="event__title">
+          Noche Premium &mdash; Vinos &amp; Cava
+          <small>Cata abierta &amp; bartender takeover</small>
+        </div>
+        <div class="event__meta">
+          <b>22:00 — 04:00</b>
+          <span>Reserva por WhatsApp</span>
+        </div>
+        <a href="https://wa.me/34600000000" target="_blank" rel="noopener" class="event__cta">Reservar</a>
+      </article>
+
+      <article class="event">
+        <div class="event__date">
+          <span class="event__date-day">28</span>
+          <span class="event__date-month">May · Jueves</span>
+        </div>
+        <div class="event__title">
+          Vintage Night &mdash; 70s &amp; 80s
+          <small>Vinilo &amp; dress code opcional</small>
+        </div>
+        <div class="event__meta">
+          <b>21:30 — 02:00</b>
+          <span>Premio al mejor look retro</span>
+        </div>
+        <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" class="event__cta">Apuntarme</a>
+      </article>
+
+      <article class="event">
+        <div class="event__date">
+          <span class="event__date-day">29</span>
+          <span class="event__date-month">May · Viernes</span>
+        </div>
+        <div class="event__title">
+          Jazz Manouche Trio <em>(en vivo)</em>
+          <small>Concierto íntimo en la barra</small>
+        </div>
+        <div class="event__meta">
+          <b>22:00 — 00:30</b>
+          <span>Aforo limitado · reserva</span>
+        </div>
+        <a href="https://wa.me/34600000000" target="_blank" rel="noopener" class="event__cta">Reservar</a>
+      </article>
+
+      <article class="event">
+        <div class="event__date">
+          <span class="event__date-day">30</span>
+          <span class="event__date-month">May · Sábado</span>
+        </div>
+        <div class="event__title">
+          Residentes + Sesión Soul
+          <small>Los nuestros, a sus anchas</small>
+        </div>
+        <div class="event__meta">
+          <b>23:00 — 04:00</b>
+          <span>Entrada libre</span>
+        </div>
+        <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" class="event__cta">Apuntarme</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     GALERIA
+============================================================ -->
+<section id="galeria" class="gallery">
+  <div class="container">
+    <div class="gallery__head">
+      <div class="reveal">
+        <div class="eyebrow">Galería</div>
+        <h2>El bar, por dentro.</h2>
+      </div>
+      <p class="reveal" data-delay="1">Más vale verlo. Estamos cargando fotos del local, la barra y las noches que se nos están haciendo cortas. De momento, un avance del ambiente.</p>
+    </div>
+
+    <div class="gallery__grid reveal">
+      <figure class="gallery__item gi-1">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M22 8h20l-2 18c-1 6-4 10-8 10s-7-4-8-10L22 8z"/>
+            <path d="M32 36v18M24 54h16"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>01 / La barra</small>El corazón del bar</figcaption>
+      </figure>
+      <figure class="gallery__item gi-2">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <circle cx="32" cy="32" r="20"/>
+            <path d="M22 32a10 10 0 0 0 20 0"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>02 / Pista</small>Donde pasa la noche</figcaption>
+      </figure>
+      <figure class="gallery__item gi-3">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M28 50V18l16-4v28"/>
+            <ellipse cx="22" cy="50" rx="6" ry="4"/>
+            <ellipse cx="38" cy="42" rx="6" ry="4"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>03 / DJ booth</small>Vinilo &amp; digital</figcaption>
+      </figure>
+      <figure class="gallery__item gi-4">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="22" y="10" width="20" height="44" rx="3"/>
+            <rect x="26" y="32" width="12" height="10" stroke-width="1"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>04 / Cava</small>Vinos &amp; añejos</figcaption>
+      </figure>
+      <figure class="gallery__item gi-5">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M16 24c0 12 7 20 16 20s16-8 16-20"/>
+            <path d="M20 24h24M28 24v-8M36 24v-8"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>05 / Cócteles</small>Hechos a mano</figcaption>
+      </figure>
+      <figure class="gallery__item gi-6">
+        <div class="gallery__item-inner">
+          <svg class="icon-deco" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.2">
+            <path d="M8 48c4-8 12-10 24-10s20 2 24 10"/>
+            <circle cx="20" cy="24" r="6"/>
+            <circle cx="44" cy="24" r="6"/>
+          </svg>
+        </div>
+        <figcaption class="gallery__item-label"><small>06 / La gente</small>El alma de La Lianta</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CONTACTO
+============================================================ -->
+<section id="contacto" class="contact">
+  <div class="container contact__inner">
+    <div class="reveal">
+      <div class="eyebrow">Contacto</div>
+      <h2>Pasa a vernos.</h2>
+      <p class="contact__tagline">Estamos en Betxí, justo donde la noche se pone interesante.</p>
+
+      <ul class="contact__list">
+        <li>
+          <small>Dirección</small>
+          <div>
+            <strong>Betxí, Castellón</strong>
+            <a href="https://maps.google.com/?q=Betxi,+Castellon" target="_blank" rel="noopener">Ver en Google Maps →</a>
+          </div>
+        </li>
+        <li>
+          <small>Instagram</small>
+          <div>
+            <strong>@laliantabetxi</strong>
+            <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener">Síguenos en Instagram →</a>
+          </div>
+        </li>
+        <li>
+          <small>WhatsApp</small>
+          <div>
+            <strong>Reservas &amp; eventos</strong>
+            <a href="https://wa.me/34600000000" target="_blank" rel="noopener">Escríbenos por WhatsApp →</a>
+          </div>
+        </li>
+        <li>
+          <small>Hola</small>
+          <div>
+            <strong>hola@laliantabetxi.com</strong>
+            <a href="mailto:hola@laliantabetxi.com">Mándanos un correo →</a>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <div class="contact__map reveal" data-delay="1" aria-label="Mapa: Betxí, Castellón">
+      <div class="contact__map-grid"></div>
+      <div class="contact__map-pin">
+        <div class="contact__map-pin-dot"></div>
+        <div class="contact__map-pin-label"><small>Aquí</small>La Lianta · Betxí</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+============================================================ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <h2>La Lianta.</h2>
+        <p>Bar, vinos y música en Betxí. Para los que entienden que un buen plan empieza con una buena copa.</p>
+      </div>
+      <div class="footer__col">
+        <h4>Visita</h4>
+        <ul>
+          <li><a href="#sobre">Sobre nosotros</a></li>
+          <li><a href="#carta">La carta</a></li>
+          <li><a href="#agenda">Agenda</a></li>
+          <li><a href="#galeria">Galería</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Horarios</h4>
+        <ul>
+          <li>Mar — Jue · 19—02h</li>
+          <li>Vie — Sáb · 19—04h</li>
+          <li>Domingo · 18—00h</li>
+          <li>Lunes · Cerrado</li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Síguenos</h4>
+        <ul>
+          <li><a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener">Instagram</a></li>
+          <li><a href="https://wa.me/34600000000" target="_blank" rel="noopener">WhatsApp</a></li>
+          <li><a href="mailto:hola@laliantabetxi.com">Email</a></li>
+          <li><a href="https://maps.google.com/?q=Betxi" target="_blank" rel="noopener">Cómo llegar</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <span>© <span data-year>2026</span> La Lianta · Betxí · <span class="marker">Disfruta con moderación.</span> Entrada exclusiva para mayores de 18 años.</span>
+      <div class="footer__social" aria-label="Redes">
+        <a href="https://instagram.com/laliantabetxi" target="_blank" rel="noopener" aria-label="Instagram">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="3" y="3" width="18" height="18" rx="5"/>
+            <circle cx="12" cy="12" r="4"/>
+            <circle cx="17.5" cy="6.5" r=".8" fill="currentColor"/>
+          </svg>
+        </a>
+        <a href="https://wa.me/34600000000" target="_blank" rel="noopener" aria-label="WhatsApp">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M5 20l1.5-4.5A8 8 0 1 1 9.5 18.5L5 20z" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 10c.5 2.5 2.5 4.5 5 5" stroke-linecap="round"/>
+          </svg>
+        </a>
+        <a href="mailto:hola@laliantabetxi.com" aria-label="Email">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M3 7l9 7 9-7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
