@@ -98,7 +98,7 @@ p { margin: 0 0 1em; text-wrap: pretty; }
   padding: 0 var(--pad);
 }
 
-section {
+#landing-root section {
   padding: var(--section-pad) 0;
   position: relative;
 }
