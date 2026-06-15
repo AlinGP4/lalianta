@@ -43,11 +43,11 @@ async function normalizePayload(payload) {
   const active = payload.active ?? true;
 
   if (!name) throw new Error("El nombre es obligatorio");
-  if (!category) throw new Error("La categoria es obligatoria");
+  if (!category) throw new Error("La categoría es obligatoria");
   const savedCategory = await getCategoryByName(category);
-  if (!savedCategory) throw new Error("La categoria no existe");
-  if (!savedCategory.active) throw new Error("La categoria esta oculta");
-  if (!Number.isInteger(priceCents) || priceCents < 0) throw new Error("El precio no es valido");
+  if (!savedCategory) throw new Error("La categoría no existe");
+  if (!savedCategory.active) throw new Error("La categoría está oculta");
+  if (!Number.isInteger(priceCents) || priceCents < 0) throw new Error("El precio no es válido");
 
   return {
     name,

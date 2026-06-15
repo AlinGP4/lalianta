@@ -37,8 +37,8 @@ export async function POST(request) {
         return Response.json(
           {
             error: customerOrderingState.blockedReason === "cash_closed"
-              ? "Caja cerrada. Actualmente no esta permitido realizar pedidos desde esta mesa."
-              : "Actualmente no esta permitido realizar pedidos desde esta mesa.",
+              ? "Caja cerrada. Actualmente no está permitido realizar pedidos desde esta mesa."
+              : "Actualmente no está permitido realizar pedidos desde esta mesa.",
           },
           { status: 403 },
         );

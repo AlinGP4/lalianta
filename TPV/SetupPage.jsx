@@ -38,7 +38,7 @@ export default function SetupPage() {
       <section className="tpv-login-shell">
         <div className="tpv-login-panel">
           <div>
-            <p className="tpv-kicker">Configuracion inicial</p>
+            <p className="tpv-kicker">Configuración inicial</p>
             <h1>Crear administrador</h1>
           </div>
 

@@ -6,7 +6,7 @@ export default function ProductAdminPage() {
     <>
       <header className="tpv-admin-head">
         <div>
-          <p className="tpv-kicker">TPV Administracion</p>
+          <p className="tpv-kicker">TPV Administración</p>
           <h1>Productos</h1>
         </div>
         <div className="tpv-head-actions">

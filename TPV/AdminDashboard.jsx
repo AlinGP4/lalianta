@@ -73,7 +73,7 @@ export default function AdminDashboard() {
     <>
       <header className="tpv-admin-head">
         <div>
-          <p className="tpv-kicker">TPV Administracion</p>
+          <p className="tpv-kicker">TPV Administración</p>
           <h1>Panel de control</h1>
         </div>
         <div className="tpv-head-actions">
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
         <Metric label="Ventas hoy" value={loading ? "Cargando" : formatPrice(metrics.revenue)} detail={`${metrics.paidTickets} tickets pagados`} />
         <Metric label="Ticket medio" value={loading ? "Cargando" : formatPrice(metrics.averageTicket)} detail="Calculado desde DB" />
         <Metric label="Pedidos abiertos" value={loading ? "..." : String(metrics.openOrders)} detail={`${metrics.kitchenOrders} en cocina`} />
-        <Metric label="Productos activos" value={loading ? "..." : String(metrics.activeProducts)} detail={`${metrics.activeCategories} categorias`} />
+        <Metric label="Productos activos" value={loading ? "..." : String(metrics.activeProducts)} detail={`${metrics.activeCategories} categorías`} />
       </section>
 
       <AdminCharts orders={orders} products={products} />

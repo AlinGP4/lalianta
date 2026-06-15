@@ -4,6 +4,7 @@ import { CheckCheck, Minus, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatPrice } from "./data";
+import { applyPendingNotificationsToTables, subscribeToPendingOrderNotifications } from "./orderNotifications";
 
 const pendingStatuses = new Set(["pending", "preparing"]);
 
@@ -231,6 +232,12 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
 
     return tables.filter((table) => String(table.number).includes(normalizedQuery));
   }, [query, tables]);
+  const pendingTables = useMemo(
+    () => tables.filter((table) => table.pendingOrders > 0),
+    [tables],
+  );
+  const pendingOrdersTotal = pendingTables.reduce((total, table) => total + table.pendingOrders, 0);
+  const pendingOrdersLabel = pendingOrdersTotal === 1 ? "1 pedido sin hacer" : `${pendingOrdersTotal} pedidos sin hacer`;
 
   const categories = useMemo(() => (
     ["Todo", ...Array.from(new Set(productList.map((product) => product.category))).sort()]
@@ -307,6 +314,14 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     }
 
     loadTables();
+  }, [selectedTable]);
+
+  useEffect(() => {
+    if (selectedTable) return undefined;
+
+    return subscribeToPendingOrderNotifications((notifications) => {
+      setTables((current) => applyPendingNotificationsToTables(current, notifications));
+    });
   }, [selectedTable]);
 
   useEffect(() => {
@@ -505,7 +520,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo anadir el producto");
+      if (!response.ok) throw new Error(data.error || "No se pudo añadir el producto");
 
       setTableOrders((current) => {
         const withoutUpdatedOrder = current.filter((order) => order.id !== data.order.id);
@@ -573,7 +588,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo cobrar la seleccion");
+      if (!response.ok) throw new Error(data.error || "No se pudo cobrar la selección");
 
       setTableOrders(data.orders);
       setSeparateSelection({});
@@ -628,7 +643,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           <Search aria-hidden="true" size={18} strokeWidth={2.2} />
           <input
             inputMode="numeric"
-            placeholder="Buscar numero de mesa"
+            placeholder="Buscar número de mesa"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -636,14 +651,22 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
 
         {error && <div className="tpv-error">{error}</div>}
 
+        {!loading && pendingOrdersTotal > 0 && (
+          <div className="tpv-mobile-table-warning" role="status">
+            <span aria-hidden="true" />
+            <strong>Aviso</strong>
+            <em>{pendingOrdersLabel}</em>
+          </div>
+        )}
+
         <section className="tpv-mobile-table-grid" aria-label="Mesas activas">
           {loading && <div className="tpv-mobile-empty">Cargando mesas...</div>}
           {!loading && filteredTables.length === 0 && (
-            <div className="tpv-mobile-empty">No hay mesas activas con ese numero.</div>
+            <div className="tpv-mobile-empty">No hay mesas activas con ese número.</div>
           )}
           {!loading && filteredTables.map((table) => (
             <button
-              className="tpv-mobile-table"
+              className={table.pendingOrders > 0 ? "tpv-mobile-table has-pending" : "tpv-mobile-table"}
               type="button"
               key={table.id}
               onClick={() => {
@@ -653,6 +676,12 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
             >
               <span>Mesa</span>
               <strong>{table.number}</strong>
+              {table.pendingOrders > 0 && (
+                <em>
+                  <i aria-hidden="true" />
+                  {table.pendingOrders === 1 ? "1 sin hacer" : `${table.pendingOrders} sin hacer`}
+                </em>
+              )}
             </button>
           ))}
         </section>
@@ -684,8 +713,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
       {error && <div className="tpv-error">{error}</div>}
 
       <div className="tpv-waiter-layout">
-        <section className="tpv-waiter-picker" aria-label="Seleccion de productos">
-          <section className="tpv-scroll-tabs" aria-label="Categorias">
+        <section className="tpv-waiter-picker" aria-label="Selección de productos">
+          <section className="tpv-scroll-tabs" aria-label="Categorías">
             {categories.map((item) => (
               <button
                 className={item === category ? "is-active" : ""}
@@ -761,7 +790,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
               <>
                 {waiterTicket.length > 0 && (
                   <div className="tpv-ticket-selection">
-                    <p>Seleccion actual</p>
+                    <p>Selección actual</p>
                     <div className="tpv-ticket-lines">
                       {waiterTicket.map((item) => (
                         <div className="tpv-ticket-line tpv-ticket-line-qty" key={item.id}>
@@ -772,7 +801,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                               <Minus aria-hidden="true" size={15} strokeWidth={2.3} />
                             </button>
                             <span>{item.qty}</span>
-                            <button type="button" onClick={() => addWaiterProduct(item)} aria-label={`Anadir ${item.name}`}>
+                            <button type="button" onClick={() => addWaiterProduct(item)} aria-label={`Añadir ${item.name}`}>
                               <Plus aria-hidden="true" size={15} strokeWidth={2.3} />
                             </button>
                           </div>
@@ -780,7 +809,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                       ))}
                     </div>
                     <div className="tpv-ticket-total">
-                      <span>Total seleccion</span>
+                      <span>Total selección</span>
                       <strong>{formatPrice(waiterTotal)}</strong>
                     </div>
                     <button
@@ -789,7 +818,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                       onClick={sendWaiterTicket}
                       disabled={sendingWaiterTicket}
                     >
-                      {sendingWaiterTicket ? "Anadiendo" : "Anadir a pendientes"}
+                      {sendingWaiterTicket ? "Añadiendo" : "Añadir a pendientes"}
                     </button>
                   </div>
                 )}
@@ -819,7 +848,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                 <p>Pedidos entregados</p>
                 {ordersLoading && <span className="tpv-ticket-muted">Cargando pedidos...</span>}
                 {!ordersLoading && deliveredTicket.items.length === 0 && (
-                  <span className="tpv-ticket-muted">Todavia no hay entregados.</span>
+                  <span className="tpv-ticket-muted">Todavía no hay entregados.</span>
                 )}
                 {!ordersLoading && deliveredTicket.items.length > 0 && (
                   <>
@@ -912,7 +941,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                 <p>Tickets pagados</p>
                 {ordersLoading && <span className="tpv-ticket-muted">Cargando tickets...</span>}
                 {!ordersLoading && paidTicket.items.length === 0 && (
-                  <span className="tpv-ticket-muted">Todavia no hay tickets pagados.</span>
+                  <span className="tpv-ticket-muted">Todavía no hay tickets pagados.</span>
                 )}
                 {!ordersLoading && paidTicket.items.length > 0 && (
                   <TicketReceipt key="paid-ticket" order={paidTicket} />
@@ -934,7 +963,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           >
             <div className="tpv-modal-head">
               <div>
-                <p className="tpv-kicker">Cubata · {formatPrice(cubataDraft.product.price)}</p>
+                <p className="tpv-kicker">Cubata - {formatPrice(cubataDraft.product.price)}</p>
                 <h2>{cubataStep === "alcohol" ? "Elige alcohol" : cubataStep === "refresco" ? "Elige refresco" : "Completa cubata"}</h2>
               </div>
               <button className="tpv-modal-close" type="button" onClick={() => setCubataDraft(null)} aria-label="Cerrar">
@@ -969,18 +998,20 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
             </div>
 
             <div className="tpv-modal-foot">
-              <button className="tpv-button tpv-button-secondary" type="button" onClick={() => setCubataDraft(null)}>
-                Cancelar
-              </button>
+              {cubataStep !== "confirm" && (
+                <button className="tpv-button tpv-button-secondary" type="button" onClick={() => setCubataDraft(null)}>
+                  Cancelar
+                </button>
+              )}
               {cubataStep === "refresco" && (
                 <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("alcohol")}>
-                  Atras
+                  Atrás
                 </button>
               )}
               {cubataStep === "confirm" && (
                 <>
                   <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("refresco")}>
-                    Atras
+                    Atrás
                   </button>
                   <button
                     className="tpv-button"
@@ -1026,7 +1057,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                       selectedItems={separateSelection}
                       mode="source"
                       onLineClick={addSeparateItem}
-                      emptyLabel="No quedan lineas por mover."
+                      emptyLabel="No quedan líneas por mover."
                     />
                   </div>
 
@@ -1037,7 +1068,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                       selectedItems={separateSelection}
                       mode="target"
                       onLineClick={removeSeparateItem}
-                      emptyLabel="Aun no has separado nada."
+                      emptyLabel="Aún no has separado nada."
                     />
                   </div>
                 </div>

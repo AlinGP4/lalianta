@@ -36,7 +36,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
       try {
         const response = await fetch("/api/settings/customer-ordering", { cache: "no-store" });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No se pudo comprobar si los pedidos estan permitidos");
+        if (!response.ok) throw new Error(data.error || "No se pudo comprobar si los pedidos están permitidos");
         setCustomerOrderingEnabled(Boolean(data.enabled));
         setBlockedReason(data.blockedReason || "");
         if (!data.enabled) setCart([]);
@@ -168,8 +168,8 @@ export default function CustomerOrder({ tableNumber = "" }) {
     if (!customerOrderingEnabled) {
       setError(
         blockedReason === "cash_closed"
-          ? "Caja cerrada. Actualmente no esta permitido realizar pedidos desde esta mesa."
-          : "Actualmente no esta permitido realizar pedidos desde esta mesa.",
+          ? "Caja cerrada. Actualmente no está permitido realizar pedidos desde esta mesa."
+          : "Actualmente no está permitido realizar pedidos desde esta mesa.",
       );
       return;
     }
@@ -221,8 +221,8 @@ export default function CustomerOrder({ tableNumber = "" }) {
               <Check aria-hidden="true" size={32} strokeWidth={3} />
             </span>
             <h2>Pedido enviado</h2>
-            <p>Tu pedido ya esta en la barra y se esta preparando.</p>
-            <span className="customer-confirm-code">Codigo {sentCode}</span>
+            <p>Tu pedido ya está en la barra y se está preparando.</p>
+            <span className="customer-confirm-code">Código {sentCode}</span>
             <button className="tpv-button" type="button" onClick={() => setSentCode("")}>
               Seguir pidiendo
             </button>
@@ -235,7 +235,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
       {customerOrderingEnabled === null && (
         <section className="customer-blocked" aria-live="polite">
           <strong>Comprobando disponibilidad</strong>
-          <p>Estamos revisando si los pedidos desde mesa estan activos.</p>
+          <p>Estamos revisando si los pedidos desde mesa están activos.</p>
         </section>
       )}
 
@@ -244,8 +244,8 @@ export default function CustomerOrder({ tableNumber = "" }) {
           <strong>{blockedReason === "cash_closed" ? "Caja cerrada" : "Pedidos desde mesa no disponibles"}</strong>
           <p>
             {blockedReason === "cash_closed"
-              ? "La caja esta cerrada y ahora mismo no se pueden realizar pedidos desde esta mesa."
-              : "Actualmente no esta permitido realizar pedidos desde esta mesa."}
+              ? "La caja está cerrada y ahora mismo no se pueden realizar pedidos desde esta mesa."
+              : "Actualmente no está permitido realizar pedidos desde esta mesa."}
           </p>
           <span>Por favor, avisa al personal para realizar tu pedido.</span>
         </section>
@@ -253,7 +253,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
 
       {customerOrderingEnabled && (
         <>
-      <section className="tpv-scroll-tabs" aria-label="Categorias">
+      <section className="tpv-scroll-tabs" aria-label="Categorías">
         {categories.map((item) => (
           <button
             className={item === category ? "is-active" : ""}
@@ -290,7 +290,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
         </div>
 
         <div className="customer-cart-lines">
-          {cart.length === 0 && <p>Toca productos para anadirlos.</p>}
+          {cart.length === 0 && <p>Toca productos para añadirlos.</p>}
           {cart.map((item) => (
             <div className="customer-cart-line" key={item.id}>
               <div>
@@ -302,7 +302,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
                   <Minus aria-hidden="true" size={16} strokeWidth={2.4} />
                 </button>
                 <span>{item.qty}</span>
-                <button type="button" onClick={() => addProduct(item)} aria-label={`Anadir ${item.name}`}>
+                <button type="button" onClick={() => addProduct(item)} aria-label={`Añadir ${item.name}`}>
                   <Plus aria-hidden="true" size={16} strokeWidth={2.4} />
                 </button>
               </div>
@@ -333,7 +333,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
           >
             <div className="tpv-modal-head">
               <div>
-                <p className="tpv-kicker">Cubata · {formatPrice(cubataDraft.product.price)}</p>
+                <p className="tpv-kicker">Cubata - {formatPrice(cubataDraft.product.price)}</p>
                 <h2>{cubataStep === "alcohol" ? "Elige alcohol" : cubataStep === "refresco" ? "Elige refresco" : "Completa cubata"}</h2>
               </div>
               <button className="tpv-modal-close" type="button" onClick={() => setCubataDraft(null)} aria-label="Cerrar">
@@ -368,18 +368,20 @@ export default function CustomerOrder({ tableNumber = "" }) {
             </div>
 
             <div className="tpv-modal-foot">
-              <button className="tpv-button tpv-button-secondary" type="button" onClick={() => setCubataDraft(null)}>
-                Cancelar
-              </button>
+              {cubataStep !== "confirm" && (
+                <button className="tpv-button tpv-button-secondary" type="button" onClick={() => setCubataDraft(null)}>
+                  Cancelar
+                </button>
+              )}
               {cubataStep === "refresco" && (
                 <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("alcohol")}>
-                  Atras
+                  Atrás
                 </button>
               )}
               {cubataStep === "confirm" && (
                 <>
                   <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("refresco")}>
-                    Atras
+                    Atrás
                   </button>
                   <button
                     className="tpv-button"

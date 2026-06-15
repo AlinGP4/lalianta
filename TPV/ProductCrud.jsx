@@ -52,7 +52,7 @@ export default function ProductCrud() {
       const productsData = await productsResponse.json();
       const categoriesData = await categoriesResponse.json();
       if (!productsResponse.ok) throw new Error(productsData.error || "No se pudieron cargar los productos");
-      if (!categoriesResponse.ok) throw new Error(categoriesData.error || "No se pudieron cargar las categorias");
+      if (!categoriesResponse.ok) throw new Error(categoriesData.error || "No se pudieron cargar las categorías");
       setProducts(productsData.products);
       setCategories(categoriesData.categories);
     } catch (requestError) {
@@ -164,7 +164,7 @@ export default function ProductCrud() {
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo guardar la categoria");
+      if (!response.ok) throw new Error(data.error || "No se pudo guardar la categoría");
 
       await loadCatalog();
       resetCategoryForm();
@@ -176,7 +176,7 @@ export default function ProductCrud() {
   }
 
   async function removeCategory(category) {
-    const confirmed = window.confirm(`Eliminar categoria ${category.name}?`);
+    const confirmed = window.confirm(`Eliminar categoría ${category.name}?`);
     if (!confirmed) return;
 
     setCategoryError("");
@@ -184,7 +184,7 @@ export default function ProductCrud() {
     try {
       const response = await fetch(`/api/categories/${category.id}`, { method: "DELETE" });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo eliminar la categoria");
+      if (!response.ok) throw new Error(data.error || "No se pudo eliminar la categoría");
       await loadCatalog();
       if (categoryForm.id === category.id) resetCategoryForm();
       if (form.category === category.name) updateField("category", "");
@@ -217,7 +217,7 @@ export default function ProductCrud() {
           aria-selected={activeTab === "categories"}
           onClick={() => setActiveTab("categories")}
         >
-          Categorias
+          Categorías
           <span>{activeCategories.length}</span>
         </button>
       </div>
@@ -227,7 +227,7 @@ export default function ProductCrud() {
       <div className="tpv-panel-head">
         <div>
           <p className="tpv-kicker">Carta</p>
-          <h2>Categorias</h2>
+          <h2>Categorías</h2>
         </div>
         <span className="tpv-count">{activeCategories.length} activas</span>
       </div>
@@ -265,8 +265,8 @@ export default function ProductCrud() {
       {categoryError && <div className="tpv-error">{categoryError}</div>}
 
       <div className="tpv-category-list">
-        {loading && <span className="tpv-ticket-muted">Cargando categorias...</span>}
-        {!loading && categories.length === 0 && <span className="tpv-ticket-muted">Todavia no hay categorias.</span>}
+        {loading && <span className="tpv-ticket-muted">Cargando categorías...</span>}
+        {!loading && categories.length === 0 && <span className="tpv-ticket-muted">Todavía no hay categorías.</span>}
         {!loading && categories.map((category) => (
           <div className="tpv-category-item" key={category.id}>
             <div>
@@ -308,7 +308,7 @@ export default function ProductCrud() {
           />
         </label>
         <label>
-          <span>Categoria</span>
+          <span>Categoría</span>
           <select
             required
             value={form.category}
@@ -361,7 +361,7 @@ export default function ProductCrud() {
           <thead>
             <tr>
               <th>Producto</th>
-              <th>Categoria</th>
+              <th>Categoría</th>
               <th>Precio</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -375,7 +375,7 @@ export default function ProductCrud() {
             )}
             {!loading && products.length === 0 && (
               <tr>
-                <td colSpan="5">Todavia no hay productos.</td>
+                <td colSpan="5">Todavía no hay productos.</td>
               </tr>
             )}
             {!loading && products.map((product) => (

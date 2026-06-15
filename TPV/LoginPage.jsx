@@ -19,7 +19,7 @@ export default function LoginPage({ next = "" }) {
         body: JSON.stringify(form),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesion");
+      if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión");
       window.location.href = next || data.redirectTo || "/tpv";
     } catch (requestError) {
       setError(requestError.message);

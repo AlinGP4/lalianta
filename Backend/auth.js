@@ -204,8 +204,8 @@ export async function authenticateUser(email, password) {
   );
 
   const row = result.rows[0];
-  if (!row || !row.active) throw new Error("Credenciales no validas");
-  if (!verifyPassword(password, row.password_hash)) throw new Error("Credenciales no validas");
+  if (!row || !row.active) throw new Error("Credenciales no válidas");
+  if (!verifyPassword(password, row.password_hash)) throw new Error("Credenciales no válidas");
 
   return normalizeUser(row);
 }

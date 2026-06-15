@@ -4,6 +4,7 @@ import { Bell, CheckCheck, Copy, ExternalLink, Power, Trash2 } from "lucide-reac
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
+import { applyPendingNotificationsToTables, subscribeToPendingOrderNotifications } from "./orderNotifications";
 
 const qrLogo = {
   src: "/assets/logo-mascot.png",
@@ -25,7 +26,6 @@ export default function TablesAdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState("");
-  const [pendingOrders, setPendingOrders] = useState([]);
   const printRef = useRef(null);
 
   const origin = useMemo(() => {
@@ -38,16 +38,10 @@ export default function TablesAdminPage() {
     setError("");
 
     try {
-      const [tablesResponse, ordersResponse] = await Promise.all([
-        fetch("/api/tables", { cache: "no-store" }),
-        fetch("/api/orders?status=pending", { cache: "no-store" }),
-      ]);
+      const tablesResponse = await fetch("/api/tables", { cache: "no-store" });
       const tablesData = await tablesResponse.json();
-      const ordersData = await ordersResponse.json();
       if (!tablesResponse.ok) throw new Error(tablesData.error || "No se pudieron cargar las mesas");
-      if (!ordersResponse.ok) throw new Error(ordersData.error || "No se pudieron cargar los pedidos pendientes");
       setTables(tablesData.tables);
-      setPendingOrders(ordersData.orders);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -59,16 +53,16 @@ export default function TablesAdminPage() {
     loadTables();
   }, []);
 
+  useEffect(() => subscribeToPendingOrderNotifications((notifications) => {
+    setTables((current) => applyPendingNotificationsToTables(current, notifications));
+  }), []);
+
   function getWaiterTableUrl(table) {
     return `${origin}/tpv/pedidos?mesa=${table.number}`;
   }
 
   function getCustomerTableUrl(table) {
     return `${origin}/pedido?mesa=${table.number}`;
-  }
-
-  function getPendingOrdersForTable(table) {
-    return pendingOrders.filter((order) => Number(order.tableNumber) === Number(table.number));
   }
 
   async function createTable() {
@@ -98,7 +92,16 @@ export default function TablesAdminPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo actualizar la mesa");
-      setTables((current) => current.map((item) => (item.id === table.id ? data.table : item)));
+      setTables((current) => current.map((item) => {
+        if (item.id !== table.id) return item;
+
+        const pendingOrders = Number(item.pendingOrders ?? data.table.pendingOrders ?? 0);
+        return {
+          ...data.table,
+          hasPendingOrders: pendingOrders > 0,
+          pendingOrders,
+        };
+      }));
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -128,12 +131,21 @@ export default function TablesAdminPage() {
   }
 
   async function markTableDelivered(table) {
-    const tableOrders = getPendingOrdersForTable(table);
-    if (tableOrders.length === 0) return;
-
     setError("");
 
     try {
+      const [pendingResponse, preparingResponse] = await Promise.all([
+        fetch(`/api/orders?tableNumber=${table.number}&status=pending`, { cache: "no-store" }),
+        fetch(`/api/orders?tableNumber=${table.number}&status=preparing`, { cache: "no-store" }),
+      ]);
+      const pendingData = await pendingResponse.json();
+      const preparingData = await preparingResponse.json();
+      if (!pendingResponse.ok) throw new Error(pendingData.error || "No se pudieron cargar los pedidos pendientes");
+      if (!preparingResponse.ok) throw new Error(preparingData.error || "No se pudieron cargar los pedidos pendientes");
+
+      const tableOrders = [...pendingData.orders, ...preparingData.orders];
+      if (tableOrders.length === 0) return;
+
       await Promise.all(tableOrders.map(async (order) => {
         const response = await fetch(`/api/orders/${order.id}`, {
           method: "PATCH",
@@ -144,9 +156,11 @@ export default function TablesAdminPage() {
         if (!response.ok) throw new Error(data.error || "No se pudo marcar el pedido como entregado");
       }));
 
-      setPendingOrders((current) => current.filter(
-        (order) => Number(order.tableNumber) !== Number(table.number),
-      ));
+      setTables((current) => current.map((item) => (
+        Number(item.number) === Number(table.number)
+          ? { ...item, hasPendingOrders: false, pendingOrders: 0 }
+          : item
+      )));
     } catch (requestError) {
       setError(requestError.message);
     }
@@ -161,7 +175,7 @@ export default function TablesAdminPage() {
     <>
       <header className="tpv-admin-head">
         <div>
-          <p className="tpv-kicker">TPV Administracion</p>
+          <p className="tpv-kicker">TPV Administración</p>
           <h1>Mesas</h1>
         </div>
         <div className="tpv-head-actions">
@@ -184,11 +198,11 @@ export default function TablesAdminPage() {
       <section className="tpv-table-card-grid" aria-label="Mesas dadas de alta">
         {loading && <article className="tpv-panel">Cargando mesas...</article>}
         {!loading && tables.length === 0 && (
-          <article className="tpv-panel">Todavia no hay mesas. Crea la primera mesa.</article>
+          <article className="tpv-panel">Todavía no hay mesas. Crea la primera mesa.</article>
         )}
         {!loading && tables.map((table) => {
-          const tablePendingOrders = getPendingOrdersForTable(table);
-          const hasPendingOrders = tablePendingOrders.length > 0;
+          const pendingOrdersCount = Number(table.pendingOrders ?? 0);
+          const hasPendingOrders = pendingOrdersCount > 0;
 
           return (
             <article className={hasPendingOrders ? "tpv-panel tpv-table-card has-pending" : "tpv-panel tpv-table-card"} key={table.id}>
@@ -198,7 +212,7 @@ export default function TablesAdminPage() {
                   {hasPendingOrders && (
                     <span className="tpv-status is-pending" title="Pedido pendiente">
                       <Bell aria-hidden="true" size={15} strokeWidth={2.4} />
-                      {tablePendingOrders.length}
+                      {pendingOrdersCount}
                     </span>
                   )}
                   <span className={table.active ? "tpv-status is-active" : "tpv-status"}>

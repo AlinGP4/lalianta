@@ -17,7 +17,7 @@ export default function AdminShell({ active, children }) {
 
   return (
     <main className="tpv-shell tpv-admin">
-      <aside className="tpv-sidebar" aria-label="TPV administracion">
+      <aside className="tpv-sidebar" aria-label="TPV administración">
         <Link className="tpv-brand" href="/">
           <span className="tpv-brand-mark">L</span>
           <span>La Lianta</span>

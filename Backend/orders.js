@@ -81,9 +81,9 @@ function isCubataProduct(product) {
 
 function assertMixerProduct(product, expectedCategory, label) {
   if (!product) throw new Error(`${label} no existe`);
-  if (!product.active) throw new Error(`${product.name} no esta activo`);
+  if (!product.active) throw new Error(`${product.name} no está activo`);
   if (normalizeCategory(product.category) !== expectedCategory) {
-    throw new Error(`${product.name} no esta en la categoria ${label}`);
+    throw new Error(`${product.name} no está en la categoría ${label}`);
   }
 }
 
@@ -104,7 +104,7 @@ async function normalizeItems(items = [], { source = "waiter" } = {}) {
     if (productId) {
       const product = await getProduct(productId);
       if (!product) throw new Error("El producto no existe");
-      if (!product.active) throw new Error(`${product.name} no esta activo`);
+      if (!product.active) throw new Error(`${product.name} no está activo`);
       productName = product.name;
       unitPriceCents = product.priceCents;
 
@@ -125,8 +125,8 @@ async function normalizeItems(items = [], { source = "waiter" } = {}) {
     }
 
     if (!productName) throw new Error("El producto es obligatorio");
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("La cantidad no es valida");
-    if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error("El precio no es valido");
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("La cantidad no es válida");
+    if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error("El precio no es válido");
 
     normalizedItems.push({
       productId: productId || null,
@@ -150,8 +150,8 @@ function normalizeSettlementItems(items = []) {
     const source = item.source === "customer" ? "customer" : "waiter";
 
     if (!productName) throw new Error("El producto es obligatorio");
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("La cantidad no es valida");
-    if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error("El precio no es valido");
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("La cantidad no es válida");
+    if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error("El precio no es válido");
 
     return {
       productName,
@@ -206,7 +206,7 @@ export async function createOrder(payload) {
   const tableNumber = isBarSale ? null : Number.parseInt(payload.tableNumber, 10);
   const items = await normalizeItems(payload.items, { source });
 
-  if (!isBarSale && (!Number.isInteger(tableNumber) || tableNumber <= 0)) throw new Error("La mesa no es valida");
+  if (!isBarSale && (!Number.isInteger(tableNumber) || tableNumber <= 0)) throw new Error("La mesa no es válida");
   if (items.length === 0) throw new Error("El pedido no tiene productos");
 
   const orderResult = await query(
@@ -275,8 +275,8 @@ export async function settleDeliveredItems(payload) {
   const tableNumber = Number.parseInt(payload.tableNumber, 10);
   const items = normalizeSettlementItems(payload.items);
 
-  if (!Number.isInteger(tableNumber) || tableNumber <= 0) throw new Error("La mesa no es valida");
-  if (items.length === 0) throw new Error("No hay lineas para cobrar");
+  if (!Number.isInteger(tableNumber) || tableNumber <= 0) throw new Error("La mesa no es válida");
+  if (items.length === 0) throw new Error("No hay líneas para cobrar");
 
   const db = getDb();
   const client = await db.connect();
@@ -482,12 +482,41 @@ export async function listOrders({ status, source, tableNumber, includeItems = f
   }));
 }
 
+export async function listPendingOrderNotifications() {
+  await ensureOrdersTables();
+
+  const result = await query(`
+    select table_number, count(*)::integer as pending_orders
+    from tpv_orders
+    where status in ('pending', 'preparing')
+      and table_number is not null
+    group by table_number
+    order by table_number asc
+  `);
+
+  const tables = result.rows.map((row) => {
+    const pendingOrders = Number(row.pending_orders ?? 0);
+
+    return {
+      tableNumber: Number(row.table_number),
+      hasPendingOrders: pendingOrders > 0,
+      pendingOrders,
+    };
+  });
+
+  return {
+    tables,
+    totalPendingOrders: tables.reduce((total, table) => total + table.pendingOrders, 0),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function deleteOrdersByTable(tableNumber) {
   await ensureOrdersTables();
 
   const normalizedTableNumber = Number.parseInt(tableNumber, 10);
   if (!Number.isInteger(normalizedTableNumber) || normalizedTableNumber <= 0) {
-    throw new Error("La mesa no es valida");
+    throw new Error("La mesa no es válida");
   }
 
   const result = await query(
@@ -524,14 +553,14 @@ export async function deleteOrdersByScope(scope) {
     return result.rowCount;
   }
 
-  throw new Error("El alcance no es valido");
+  throw new Error("El alcance no es válido");
 }
 
 export async function updateOrderStatus(id, status) {
   await ensureOrdersTables();
 
   const allowedStatuses = ["pending", "preparing", "delivered", "paid", "cancelled", "open"];
-  if (!allowedStatuses.includes(status)) throw new Error("El estado no es valido");
+  if (!allowedStatuses.includes(status)) throw new Error("El estado no es válido");
 
   const result = await query(
     `

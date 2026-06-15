@@ -130,7 +130,7 @@ export default function AdminCharts({ orders = [], products = [] }) {
         (order.items ?? []).forEach((item) => {
           const category = productCategoryLookup.byId.get(item.productId)
             || productCategoryLookup.byName.get(item.productName)
-            || "Sin categoria";
+            || "Sin categoría";
           unitsByCategory.set(category, (unitsByCategory.get(category) ?? 0) + item.quantity);
         });
       });
@@ -208,7 +208,7 @@ export default function AdminCharts({ orders = [], products = [] }) {
         <div className="tpv-panel-head">
           <div>
             <p className="tpv-kicker">Carta</p>
-            <h2>Categorias</h2>
+            <h2>Categorías</h2>
           </div>
         </div>
         <div className="tpv-chart-box">

@@ -137,7 +137,7 @@ export default function UsersAdminPage() {
     <>
       <header className="tpv-admin-head">
         <div>
-          <p className="tpv-kicker">TPV Administracion</p>
+          <p className="tpv-kicker">TPV Administración</p>
           <h1>Usuarios</h1>
         </div>
       </header>
@@ -226,7 +226,7 @@ export default function UsersAdminPage() {
               )}
               {!loading && users.length === 0 && (
                 <tr>
-                  <td colSpan="6">Todavia no hay usuarios.</td>
+                  <td colSpan="6">Todavía no hay usuarios.</td>
                 </tr>
               )}
               {!loading && users.map((user) => {
@@ -308,7 +308,7 @@ export default function UsersAdminPage() {
                             <button
                               type="button"
                               onClick={cancelEdit}
-                              aria-label={`Cancelar edicion de ${user.name}`}
+                              aria-label={`Cancelar edición de ${user.name}`}
                               title="Cancelar"
                             >
                               <X aria-hidden="true" size={16} strokeWidth={2.2} />

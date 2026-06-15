@@ -20,10 +20,14 @@ async function ensureTablesTable() {
 }
 
 function normalizeTable(row) {
+  const pendingOrders = Number(row.pending_orders ?? 0);
+
   return {
     id: row.id,
     number: row.table_number,
     active: row.active,
+    hasPendingOrders: pendingOrders > 0,
+    pendingOrders,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -32,13 +36,45 @@ function normalizeTable(row) {
 export async function listTables({ includeInactive = true } = {}) {
   await ensureTablesTable();
 
+  const ordersTableResult = await query("select to_regclass('public.tpv_orders') as table_name");
+  const hasOrdersTable = Boolean(ordersTableResult.rows[0]?.table_name);
+  if (hasOrdersTable) {
+    await query("alter table tpv_orders add column if not exists table_number integer");
+  }
+
   const result = await query(
-    `
-      select id, table_number, active, created_at, updated_at
-      from tpv_tables
-      where ($1::boolean = true or active = true)
-      order by table_number asc
-    `,
+    hasOrdersTable
+      ? `
+        select
+          t.id,
+          t.table_number,
+          t.active,
+          coalesce(os.pending_orders, 0)::integer as pending_orders,
+          t.created_at,
+          t.updated_at
+        from tpv_tables t
+        left join (
+          select table_number, count(*)::integer as pending_orders
+          from tpv_orders
+          where status in ('pending', 'preparing')
+            and table_number is not null
+          group by table_number
+        ) os on os.table_number = t.table_number
+        where ($1::boolean = true or t.active = true)
+        order by t.table_number asc
+      `
+      : `
+        select
+          id,
+          table_number,
+          active,
+          0::integer as pending_orders,
+          created_at,
+          updated_at
+        from tpv_tables
+        where ($1::boolean = true or active = true)
+        order by table_number asc
+      `,
     [includeInactive],
   );
 

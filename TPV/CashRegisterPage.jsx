@@ -214,7 +214,7 @@ export default function CashRegisterPage() {
     <>
       <header className="tpv-admin-head">
         <div>
-          <p className="tpv-kicker">TPV Administracion</p>
+          <p className="tpv-kicker">TPV Administración</p>
           <h1>Caja</h1>
         </div>
         <div className="tpv-head-actions">
@@ -267,7 +267,7 @@ export default function CashRegisterPage() {
             {sessionOpen
               ? customerOrderingEnabled
                 ? "Los clientes pueden pedir desde el QR."
-                : "Los clientes estan bloqueados aunque la caja sigue abierta."
+                : "Los clientes están bloqueados aunque la caja sigue abierta."
               : "Con la caja cerrada los clientes no pueden pedir desde el QR."}
           </p>
           <div className="tpv-cash-rule-list">
@@ -327,10 +327,10 @@ export default function CashRegisterPage() {
             <button
               className="tpv-ticket-reset"
               type="button"
-              onClick={() => resetTickets("today", "del dia")}
+              onClick={() => resetTickets("today", "del día")}
               disabled={Boolean(resettingTicketsScope)}
             >
-              {resettingTicketsScope === "today" ? "Reiniciando..." : "Reiniciar dia"}
+              {resettingTicketsScope === "today" ? "Reiniciando..." : "Reiniciar día"}
             </button>
             <button
               className="tpv-ticket-reset"
@@ -467,7 +467,7 @@ export default function CashRegisterPage() {
             className="tpv-modal-window tpv-modal-window-compact"
             role="dialog"
             aria-modal="true"
-            aria-label={`Previsualizacion ${previewTicket.id}`}
+            aria-label={`Previsualización ${previewTicket.id}`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="tpv-modal-head">

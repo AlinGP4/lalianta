@@ -15,7 +15,7 @@ export default function TpvHomePage() {
         <h1>TPV LaLianta</h1>
         <nav className="tpv-entry-list" aria-label="Entrar al TPV">
           <Link className="tpv-entry" href="/tpv/admin">
-            <strong>TPV administracion</strong>
+            <strong>TPV administración</strong>
           </Link>
           <Link className="tpv-entry" href="/tpv/pedidos">
             <strong>TPV pedidos</strong>

@@ -154,8 +154,8 @@ export default function BarSalesPage() {
       </section>
 
       <div className="tpv-waiter-layout">
-        <section className="tpv-waiter-picker" aria-label="Seleccion de productos">
-          <section className="tpv-scroll-tabs" aria-label="Categorias">
+        <section className="tpv-waiter-picker" aria-label="Selección de productos">
+          <section className="tpv-scroll-tabs" aria-label="Categorías">
             {categories.map((item) => (
               <button
                 className={item === category ? "is-active" : ""}
@@ -201,7 +201,7 @@ export default function BarSalesPage() {
           <div className="tpv-ticket-block">
             <p>Ticket actual</p>
             {cart.length === 0 && (
-              <span className="tpv-ticket-muted">Toca productos para anadirlos.</span>
+              <span className="tpv-ticket-muted">Toca productos para añadirlos.</span>
             )}
             {cart.length > 0 && (
               <div className="tpv-ticket-lines">
@@ -214,7 +214,7 @@ export default function BarSalesPage() {
                         <Minus aria-hidden="true" size={15} strokeWidth={2.3} />
                       </button>
                       <span>{item.qty}</span>
-                      <button type="button" onClick={() => addProduct(item)} aria-label={`Anadir ${item.name}`}>
+                      <button type="button" onClick={() => addProduct(item)} aria-label={`Añadir ${item.name}`}>
                         <Plus aria-hidden="true" size={15} strokeWidth={2.3} />
                       </button>
                     </div>

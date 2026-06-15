@@ -2,9 +2,9 @@ import "../styles.css";
 import "../TPV/tpv.css";
 
 export const metadata = {
-  title: "La Lianta - Bar & Vinos · Betxi",
+  title: "La Lianta - Bar & Vinos · Betxí",
   description:
-    "La Lianta - bar y discoteca en Betxi. Vinos, cocteles de autor, musica en vivo y noches a recordar.",
+    "La Lianta - bar y discoteca en Betxí. Vinos, cócteles de autor, música en vivo y noches a recordar.",
 };
 
 export const viewport = {

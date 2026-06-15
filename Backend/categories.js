@@ -50,7 +50,7 @@ function normalizePayload(payload) {
   const name = String(payload.name ?? "").trim();
   const active = payload.active ?? true;
 
-  if (!name) throw new Error("El nombre de categoria es obligatorio");
+  if (!name) throw new Error("El nombre de categoría es obligatorio");
 
   return {
     name,
@@ -154,7 +154,7 @@ export async function deleteCategory(id) {
       [categoryName],
     );
     if (usedResult.rows[0]?.total > 0) {
-      throw new Error("No puedes borrar una categoria con productos");
+      throw new Error("No puedes borrar una categoría con productos");
     }
   }
 
