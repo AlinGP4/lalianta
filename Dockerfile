@@ -23,4 +23,4 @@ COPY --from=builder /app/script.js ./script.js
 COPY --from=builder /app/styles.css ./styles.css
 COPY --from=builder /app/assets ./assets
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "PORT=3000 HOSTNAME=0.0.0.0 node server.js"]
