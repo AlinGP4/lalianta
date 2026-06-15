@@ -14,15 +14,13 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/package-lock.json ./package-lock.json
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
+ENV HOSTNAME=0.0.0.0
+COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/app ./app
-COPY --from=builder /app/Backend ./Backend
-COPY --from=builder /app/TPV ./TPV
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/index.html ./index.html
+COPY --from=builder /app/script.js ./script.js
 COPY --from=builder /app/styles.css ./styles.css
-COPY --from=builder /app/middleware.js ./middleware.js
+COPY --from=builder /app/assets ./assets
 EXPOSE 3000
-CMD ["npm", "run", "start", "--", "-p", "3000"]
+CMD ["node", "server.js"]
