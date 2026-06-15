@@ -1,8 +1,7 @@
 "use client";
 
-import { BanknoteArrowDown, BanknoteArrowUp, Clock3, CreditCard, DoorClosed, DoorOpen, ReceiptText, ShieldCheck, Wallet } from "lucide-react";
+import { BanknoteArrowDown, BanknoteArrowUp, Clock3, CreditCard, DoorClosed, DoorOpen, QrCode, ReceiptText, ShieldCheck, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
-import AdminShell from "./AdminShell";
 import { formatPrice } from "./data";
 
 const sessionSeed = {
@@ -49,7 +48,7 @@ export default function CashRegisterPage() {
   const money = (value) => (showTotals ? formatPrice(value) : "*****");
 
   return (
-    <AdminShell active="caja">
+    <>
       <header className="tpv-admin-head">
         <div>
           <p className="tpv-kicker">TPV Administracion</p>
@@ -106,14 +105,6 @@ export default function CashRegisterPage() {
               <p className="tpv-kicker">Pedidos cliente</p>
               <h2>Permitir pedidos desde QR</h2>
             </div>
-            <button
-              className={customerOrderingEnabled && sessionOpen ? "tpv-toggle is-active" : "tpv-toggle"}
-              type="button"
-              aria-pressed={customerOrderingEnabled && sessionOpen}
-              onClick={() => setCustomerOrderingEnabled((current) => !current)}
-            >
-              <span />
-            </button>
           </div>
           <p className="tpv-cash-note">
             {sessionOpen
@@ -132,6 +123,22 @@ export default function CashRegisterPage() {
               <span>Los cobros siguen quedando registrados por ticket</span>
             </div>
           </div>
+          <button
+            className={customerOrderingEnabled && sessionOpen ? "tpv-cash-qr-button is-active" : "tpv-cash-qr-button"}
+            type="button"
+            aria-pressed={customerOrderingEnabled && sessionOpen}
+            disabled={!sessionOpen}
+            onClick={() => setCustomerOrderingEnabled((current) => !current)}
+          >
+            <QrCode size={18} strokeWidth={2.1} />
+            <span>
+              {sessionOpen
+                ? customerOrderingEnabled
+                  ? "Bloquear pedidos desde QR"
+                  : "Permitir pedidos desde QR"
+                : "Caja cerrada: QR bloqueado"}
+            </span>
+          </button>
         </article>
       </section>
 
@@ -238,7 +245,7 @@ export default function CashRegisterPage() {
           </div>
         )}
       </section>
-    </AdminShell>
+    </>
   );
 }
 

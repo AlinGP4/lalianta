@@ -1,5 +1,5 @@
+import Link from "next/link";
 import AdminCharts from "./AdminCharts";
-import AdminShell from "./AdminShell";
 import { categories, formatPrice, openOrders, products } from "./data";
 
 const revenue = 846.7;
@@ -8,14 +8,14 @@ const activeProducts = products.filter((product) => product.active).length;
 
 export default function AdminDashboard() {
   return (
-    <AdminShell active="panel">
+    <>
       <header className="tpv-admin-head">
         <div>
           <p className="tpv-kicker">TPV Administracion</p>
           <h1>Panel de control</h1>
         </div>
         <div className="tpv-head-actions">
-          <a className="tpv-button tpv-button-secondary" href="/tpv">Cambiar vista</a>
+          <Link className="tpv-button tpv-button-secondary" href="/tpv">Cambiar vista</Link>
         </div>
       </header>
 
@@ -27,7 +27,7 @@ export default function AdminDashboard() {
       </section>
 
       <AdminCharts />
-    </AdminShell>
+    </>
   );
 }
 

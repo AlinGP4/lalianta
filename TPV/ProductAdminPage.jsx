@@ -1,20 +1,20 @@
-import AdminShell from "./AdminShell";
+import Link from "next/link";
 import ProductCrud from "./ProductCrud";
 
 export default function ProductAdminPage() {
   return (
-    <AdminShell active="productos">
+    <>
       <header className="tpv-admin-head">
         <div>
           <p className="tpv-kicker">TPV Administracion</p>
           <h1>Productos</h1>
         </div>
         <div className="tpv-head-actions">
-          <a className="tpv-button tpv-button-secondary" href="/tpv/admin">Volver al panel</a>
+          <Link className="tpv-button tpv-button-secondary" href="/tpv/admin">Volver al panel</Link>
         </div>
       </header>
 
       <ProductCrud />
-    </AdminShell>
+    </>
   );
 }

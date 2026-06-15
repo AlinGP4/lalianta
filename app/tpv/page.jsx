@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export const metadata = {
   title: "TPV - La Lianta",
   robots: {
@@ -12,12 +14,12 @@ export default function TpvHomePage() {
       <section className="tpv-entry-panel">
         <h1>TPV LaLianta</h1>
         <nav className="tpv-entry-list" aria-label="Entrar al TPV">
-          <a className="tpv-entry" href="/tpv/admin">
+          <Link className="tpv-entry" href="/tpv/admin">
             <strong>TPV administracion</strong>
-          </a>
-          <a className="tpv-entry" href="/tpv/pedidos">
+          </Link>
+          <Link className="tpv-entry" href="/tpv/pedidos">
             <strong>TPV pedidos</strong>
-          </a>
+          </Link>
         </nav>
       </section>
     </main>

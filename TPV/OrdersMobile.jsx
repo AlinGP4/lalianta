@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCheck, Search, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { categories, formatPrice, products } from "./data";
 
@@ -484,12 +485,12 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     return (
       <main className="tpv-phone tpv-phone-tables">
         <header className="tpv-phone-head">
-          <a className="tpv-phone-back" href="/tpv" aria-label="Volver">{"<"}</a>
+          <Link className="tpv-phone-back" href="/tpv" aria-label="Volver">{"<"}</Link>
           <div>
             <p className="tpv-kicker">TPV Pedidos</p>
             <h1>Mesas</h1>
           </div>
-          <a className="tpv-phone-admin" href="/tpv/admin">Admin</a>
+          <Link className="tpv-phone-admin" href="/tpv/admin">Admin</Link>
         </header>
 
         <section className="tpv-table-search" aria-label="Buscar mesa">
@@ -546,7 +547,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           <p className="tpv-kicker">TPV Pedidos</p>
           <h1>Mesa {selectedTable}</h1>
         </div>
-        <a className="tpv-phone-admin" href="/tpv/admin">Admin</a>
+        <Link className="tpv-phone-admin" href="/tpv/admin">Admin</Link>
       </header>
 
       {error && <div className="tpv-error">{error}</div>}

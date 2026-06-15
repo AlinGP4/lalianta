@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AdminShell from "./AdminShell";
 
 export default function UsersAdminPage() {
   const [users, setUsers] = useState([]);
@@ -56,7 +55,7 @@ export default function UsersAdminPage() {
   }
 
   return (
-    <AdminShell active="usuarios">
+    <>
       <header className="tpv-admin-head">
         <div>
           <p className="tpv-kicker">TPV Administracion</p>
@@ -147,6 +146,6 @@ export default function UsersAdminPage() {
           </table>
         </div>
       </section>
-    </AdminShell>
+    </>
   );
 }

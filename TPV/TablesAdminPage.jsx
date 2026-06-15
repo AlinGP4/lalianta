@@ -4,7 +4,6 @@ import { Bell, CheckCheck, Copy, ExternalLink, Power, Trash2 } from "lucide-reac
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
-import AdminShell from "./AdminShell";
 
 const qrLogo = {
   src: "/assets/logo-mascot.png",
@@ -159,7 +158,7 @@ export default function TablesAdminPage() {
   });
 
   return (
-    <AdminShell active="mesas">
+    <>
       <header className="tpv-admin-head">
         <div>
           <p className="tpv-kicker">TPV Administracion</p>
@@ -270,6 +269,6 @@ export default function TablesAdminPage() {
           </article>
         ))}
       </section>
-    </AdminShell>
+    </>
   );
 }
