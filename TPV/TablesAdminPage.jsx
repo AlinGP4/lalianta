@@ -196,7 +196,7 @@ export default function TablesAdminPage() {
                 <h2><span>Mesa</span> {table.number}</h2>
                 <div className="tpv-table-card-states">
                   {hasPendingOrders && (
-                    <span className="tpv-pending-badge" title="Pedido pendiente">
+                    <span className="tpv-status is-pending" title="Pedido pendiente">
                       <Bell aria-hidden="true" size={15} strokeWidth={2.4} />
                       {tablePendingOrders.length}
                     </span>

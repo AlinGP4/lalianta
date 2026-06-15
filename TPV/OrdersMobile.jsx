@@ -1,11 +1,26 @@
 "use client";
 
-import { CheckCheck, Search, X } from "lucide-react";
+import { CheckCheck, Minus, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { categories, formatPrice, products } from "./data";
+import { formatPrice } from "./data";
 
 const pendingStatuses = new Set(["pending", "preparing"]);
+
+function isCubataProduct(product) {
+  return product.category?.toLocaleLowerCase("es-ES") === "cubata" || product.name?.toLocaleLowerCase("es-ES") === "cubata";
+}
+
+function buildCubataItem(product, alcoholProduct, refrescoProduct) {
+  return {
+    ...product,
+    alcoholProductId: alcoholProduct.id,
+    id: `${product.id}:${alcoholProduct.id}:${refrescoProduct.id}`,
+    name: `${product.name} - ${alcoholProduct.name} + ${refrescoProduct.name}`,
+    productId: product.id,
+    refrescoProductId: refrescoProduct.id,
+  };
+}
 
 function formatTicketDate(value) {
   if (!value) return "";
@@ -198,6 +213,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [loading, setLoading] = useState(!initialTableNumber);
   const [error, setError] = useState("");
   const [tableOrders, setTableOrders] = useState([]);
+  const [productList, setProductList] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ticketTab, setTicketTab] = useState("pending");
   const [paymentMode, setPaymentMode] = useState("full");
@@ -205,6 +222,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [separateSelection, setSeparateSelection] = useState({});
   const [separateModalOpen, setSeparateModalOpen] = useState(false);
   const [settlingPayment, setSettlingPayment] = useState(false);
+  const [resettingOrders, setResettingOrders] = useState(false);
+  const [cubataDraft, setCubataDraft] = useState(null);
 
   const filteredTables = useMemo(() => {
     const normalizedQuery = query.trim();
@@ -213,10 +232,31 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     return tables.filter((table) => String(table.number).includes(normalizedQuery));
   }, [query, tables]);
 
+  const categories = useMemo(() => (
+    ["Todo", ...Array.from(new Set(productList.map((product) => product.category))).sort()]
+  ), [productList]);
+
   const filteredProducts = useMemo(() => {
-    if (category === "Todo") return products;
-    return products.filter((product) => product.category === category);
-  }, [category]);
+    if (category === "Todo") return productList;
+    return productList.filter((product) => product.category === category);
+  }, [category, productList]);
+  const alcoholProducts = useMemo(
+    () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "alcohol"),
+    [productList],
+  );
+  const refrescoProducts = useMemo(
+    () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "refresco"),
+    [productList],
+  );
+  const selectedCubataAlcohol = useMemo(
+    () => alcoholProducts.find((product) => product.id === cubataDraft?.alcoholProductId),
+    [alcoholProducts, cubataDraft?.alcoholProductId],
+  );
+  const selectedCubataRefresco = useMemo(
+    () => refrescoProducts.find((product) => product.id === cubataDraft?.refrescoProductId),
+    [refrescoProducts, cubataDraft?.refrescoProductId],
+  );
+  const cubataStep = cubataDraft?.step ?? "alcohol";
 
   const waiterTotal = waiterTicket.reduce((sum, item) => sum + item.qty * item.price, 0);
   const deliveredTicket = useMemo(() => mergeOrdersByStatus(tableOrders, "delivered"), [tableOrders]);
@@ -226,6 +266,26 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     () => buildSeparateTicket(deliveredTicket, separateSelection),
     [deliveredTicket, separateSelection],
   );
+
+  useEffect(() => {
+    async function loadProducts() {
+      setProductsLoading(true);
+      setError("");
+
+      try {
+        const response = await fetch("/api/products?includeInactive=false", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudieron cargar los productos");
+        setProductList(data.products);
+      } catch (requestError) {
+        setError(requestError.message);
+      } finally {
+        setProductsLoading(false);
+      }
+    }
+
+    loadProducts();
+  }, []);
 
   useEffect(() => {
     if (selectedTable) return;
@@ -358,7 +418,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     }
   }
 
-  function addWaiterProduct(product) {
+  function addWaiterItem(product) {
     setTicketTab("pending");
     setWaiterTicket((current) => {
       const existing = current.find((item) => item.id === product.id);
@@ -368,6 +428,51 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
 
       return [...current, { ...product, qty: 1 }];
     });
+  }
+
+  function addWaiterProduct(product) {
+    if (isCubataProduct(product) && !product.alcoholProductId && !product.refrescoProductId) {
+      setCubataDraft({
+        alcoholProductId: "",
+        product,
+        refrescoProductId: "",
+        step: "alcohol",
+      });
+      return;
+    }
+
+    addWaiterItem(product);
+  }
+
+  function selectCubataAlcohol(productId) {
+    setCubataDraft((current) => current ? {
+      ...current,
+      alcoholProductId: productId,
+      refrescoProductId: "",
+      step: "refresco",
+    } : current);
+  }
+
+  function selectCubataRefresco(productId) {
+    setCubataDraft((current) => current ? {
+      ...current,
+      refrescoProductId: productId,
+      step: "confirm",
+    } : current);
+  }
+
+  function moveCubataStep(step) {
+    setCubataDraft((current) => current ? { ...current, step } : current);
+  }
+
+  function confirmCubata() {
+    if (!cubataDraft?.alcoholProductId || !cubataDraft?.refrescoProductId) return;
+    const alcoholProduct = alcoholProducts.find((product) => product.id === cubataDraft.alcoholProductId);
+    const refrescoProduct = refrescoProducts.find((product) => product.id === cubataDraft.refrescoProductId);
+    if (!alcoholProduct || !refrescoProduct) return;
+
+    addWaiterItem(buildCubataItem(cubataDraft.product, alcoholProduct, refrescoProduct));
+    setCubataDraft(null);
   }
 
   function removeWaiterProduct(productId) {
@@ -392,9 +497,10 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           tableNumber: selectedTable,
           source: "waiter",
           items: waiterTicket.map((item) => ({
-            productName: item.name,
+            alcoholProductId: item.alcoholProductId,
+            productId: item.productId ?? item.id,
             quantity: item.qty,
-            price: item.price,
+            refrescoProductId: item.refrescoProductId,
           })),
         }),
       });
@@ -481,6 +587,31 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     }
   }
 
+  async function resetTableOrders() {
+    const confirmed = window.confirm(`Reiniciar todos los pedidos de la Mesa ${selectedTable}?`);
+    if (!confirmed) return;
+
+    setResettingOrders(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/orders?tableNumber=${selectedTable}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudieron reiniciar los pedidos");
+
+      setTableOrders([]);
+      setWaiterTicket([]);
+      setSeparateSelection({});
+      setSeparateModalOpen(false);
+      setPaymentMode("full");
+      setTicketTab("pending");
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setResettingOrders(false);
+    }
+  }
+
   if (!selectedTable) {
     return (
       <main className="tpv-phone tpv-phone-tables">
@@ -554,7 +685,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
 
       <div className="tpv-waiter-layout">
         <section className="tpv-waiter-picker" aria-label="Seleccion de productos">
-          <section className="tpv-mobile-tabs" aria-label="Categorias">
+          <section className="tpv-scroll-tabs" aria-label="Categorias">
             {categories.map((item) => (
               <button
                 className={item === category ? "is-active" : ""}
@@ -568,9 +699,13 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           </section>
 
           <section className="tpv-product-grid" aria-label="Productos">
+            {productsLoading && <div className="tpv-mobile-empty">Cargando productos...</div>}
+            {!productsLoading && filteredProducts.length === 0 && (
+              <div className="tpv-mobile-empty">No hay productos disponibles.</div>
+            )}
             {filteredProducts.map((product) => (
               <button
-                className="tpv-product-tile"
+                className="tpv-tile"
                 type="button"
                 key={product.id}
                 onClick={() => addWaiterProduct(product)}
@@ -588,8 +723,16 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
             <strong>Ticket mesa {selectedTable}</strong>
             <span>{tableOrders.filter((order) => pendingStatuses.has(order.status)).length} pendientes</span>
           </div>
+          <button
+            className="tpv-ticket-reset"
+            type="button"
+            onClick={resetTableOrders}
+            disabled={resettingOrders || (tableOrders.length === 0 && waiterTicket.length === 0)}
+          >
+            {resettingOrders ? "Reiniciando..." : "Reiniciar pedidos"}
+          </button>
 
-          <div className="tpv-ticket-tabs" role="tablist" aria-label="Estado de pedidos">
+          <div className="tpv-segmented" role="tablist" aria-label="Estado de pedidos">
             <button
               className={ticketTab === "pending" ? "is-active" : ""}
               type="button"
@@ -621,16 +764,19 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                     <p>Seleccion actual</p>
                     <div className="tpv-ticket-lines">
                       {waiterTicket.map((item) => (
-                        <button
-                          className="tpv-ticket-line tpv-ticket-line-button"
-                          type="button"
-                          key={item.id}
-                          onClick={() => removeWaiterProduct(item.id)}
-                          title="Quitar 1"
-                        >
-                          <span>{item.qty}x {item.name}</span>
+                        <div className="tpv-ticket-line tpv-ticket-line-qty" key={item.id}>
+                          <span>{item.name}</span>
                           <strong>{formatPrice(item.qty * item.price)}</strong>
-                        </button>
+                          <div className="tpv-qty">
+                            <button type="button" onClick={() => removeWaiterProduct(item.id)} aria-label={`Quitar ${item.name}`}>
+                              <Minus aria-hidden="true" size={15} strokeWidth={2.3} />
+                            </button>
+                            <span>{item.qty}</span>
+                            <button type="button" onClick={() => addWaiterProduct(item)} aria-label={`Anadir ${item.name}`}>
+                              <Plus aria-hidden="true" size={15} strokeWidth={2.3} />
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
                     <div className="tpv-ticket-total">
@@ -744,6 +890,14 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                             <span>Importe por persona</span>
                             <strong>{formatPrice(splitTotal)}</strong>
                           </div>
+                          <button
+                            className="tpv-button"
+                            type="button"
+                            onClick={markDeliveredAsPaid}
+                            disabled={settlingPayment}
+                          >
+                            {settlingPayment ? "Pagando..." : "Pagar"}
+                          </button>
                         </div>
                       )}
 
@@ -768,6 +922,80 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           </div>
         </aside>
       </div>
+
+      {cubataDraft && (
+        <div className="tpv-modal-backdrop" role="presentation" onClick={() => setCubataDraft(null)}>
+          <section
+            className="tpv-modal-window tpv-modal-window-compact"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Seleccionar cubata"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="tpv-modal-head">
+              <div>
+                <p className="tpv-kicker">Cubata · {formatPrice(cubataDraft.product.price)}</p>
+                <h2>{cubataStep === "alcohol" ? "Elige alcohol" : cubataStep === "refresco" ? "Elige refresco" : "Completa cubata"}</h2>
+              </div>
+              <button className="tpv-modal-close" type="button" onClick={() => setCubataDraft(null)} aria-label="Cerrar">
+                <X aria-hidden="true" size={20} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            <div className="tpv-modal-body tpv-mixer-modal tpv-mixer-step-modal">
+              <MixerSteps step={cubataStep} />
+              {cubataStep === "alcohol" && (
+                <MixerColumn
+                  label="1. Alcohol"
+                  products={alcoholProducts}
+                  selectedId={cubataDraft.alcoholProductId}
+                  onSelect={selectCubataAlcohol}
+                />
+              )}
+              {cubataStep === "refresco" && (
+                <MixerColumn
+                  label="2. Refresco"
+                  products={refrescoProducts}
+                  selectedId={cubataDraft.refrescoProductId}
+                  onSelect={selectCubataRefresco}
+                />
+              )}
+              {cubataStep === "confirm" && (
+                <div className="tpv-mixer-summary">
+                  <MixerChoiceSummary label="Alcohol" product={selectedCubataAlcohol} />
+                  <MixerChoiceSummary label="Refresco" product={selectedCubataRefresco} />
+                </div>
+              )}
+            </div>
+
+            <div className="tpv-modal-foot">
+              <button className="tpv-button tpv-button-secondary" type="button" onClick={() => setCubataDraft(null)}>
+                Cancelar
+              </button>
+              {cubataStep === "refresco" && (
+                <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("alcohol")}>
+                  Atras
+                </button>
+              )}
+              {cubataStep === "confirm" && (
+                <>
+                  <button className="tpv-button tpv-button-secondary" type="button" onClick={() => moveCubataStep("refresco")}>
+                    Atras
+                  </button>
+                  <button
+                    className="tpv-button"
+                    type="button"
+                    onClick={confirmCubata}
+                    disabled={!cubataDraft.alcoholProductId || !cubataDraft.refrescoProductId}
+                  >
+                    Completar cubata
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
       {separateModalOpen && (
         <div className="tpv-modal-backdrop" role="presentation" onClick={closeSeparateModal}>
@@ -830,5 +1058,61 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
         </div>
       )}
     </main>
+  );
+}
+
+function MixerSteps({ step }) {
+  const steps = [
+    ["alcohol", "Alcohol"],
+    ["refresco", "Refresco"],
+    ["confirm", "Completar"],
+  ];
+  const currentIndex = steps.findIndex(([id]) => id === step);
+
+  return (
+    <div className="tpv-mixer-steps" aria-label="Pasos del cubata">
+      {steps.map(([id, label], index) => (
+        <span
+          className={[
+            "tpv-mixer-step",
+            step === id ? "is-active" : "",
+            index < currentIndex ? "is-done" : "",
+          ].filter(Boolean).join(" ")}
+          key={id}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MixerChoiceSummary({ label, product }) {
+  return (
+    <div className="tpv-mixer-choice">
+      <span>{label}</span>
+      <strong>{product?.name ?? "Sin seleccionar"}</strong>
+    </div>
+  );
+}
+
+function MixerColumn({ label, products, selectedId, onSelect }) {
+  return (
+    <div className="tpv-mixer-column">
+      <p>{label}</p>
+      <div className="tpv-mixer-options">
+        {products.length === 0 && <span className="tpv-ticket-muted">No hay productos de este tipo.</span>}
+        {products.map((product) => (
+          <button
+            className={selectedId === product.id ? "is-active" : ""}
+            type="button"
+            key={product.id}
+            onClick={() => onSelect(product.id)}
+          >
+            <strong>{product.name}</strong>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

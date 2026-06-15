@@ -68,6 +68,36 @@ export async function listUsers() {
   return result.rows.map(normalizeUser);
 }
 
+export async function getUser(id) {
+  await ensureUsersTable();
+  const result = await query(
+    `
+      select id, name, email, role, active, created_at, updated_at
+      from tpv_users
+      where id = $1
+    `,
+    [id],
+  );
+
+  return result.rows[0] ? normalizeUser(result.rows[0]) : null;
+}
+
+async function countActiveAdmins({ excludeId = "" } = {}) {
+  await ensureUsersTable();
+  const result = await query(
+    `
+      select count(*)::integer as count
+      from tpv_users
+      where role = 'admin'
+        and active = true
+        and ($1::uuid is null or id <> $1::uuid)
+    `,
+    [excludeId || null],
+  );
+
+  return result.rows[0]?.count ?? 0;
+}
+
 export async function createUser({ name, email, password, role = "worker", active = true }) {
   await ensureUsersTable();
 
@@ -89,6 +119,74 @@ export async function createUser({ name, email, password, role = "worker", activ
   );
 
   return normalizeUser(result.rows[0]);
+}
+
+export async function updateUser(id, payload) {
+  await ensureUsersTable();
+
+  const current = await getUser(id);
+  if (!current) return null;
+
+  const trimmedName = String(payload.name || "").trim();
+  const normalizedEmail = String(payload.email || "").trim().toLowerCase();
+  const normalizedRole = payload.role === "admin" ? "admin" : "worker";
+  const active = payload.active ?? current.active;
+  const normalizedActive = Boolean(active);
+  const password = String(payload.password || "");
+
+  if (!trimmedName) throw new Error("El nombre es obligatorio");
+  if (!normalizedEmail) throw new Error("El email es obligatorio");
+  if (password && password.length < 6) throw new Error("La clave debe tener al menos 6 caracteres");
+
+  if (current.role === "admin" && current.active && (normalizedRole !== "admin" || !normalizedActive)) {
+    const otherActiveAdmins = await countActiveAdmins({ excludeId: id });
+    if (otherActiveAdmins === 0) throw new Error("Debe quedar al menos un administrador activo");
+  }
+
+  const result = await query(
+    password
+      ? `
+          update tpv_users
+          set name = $2,
+              email = $3,
+              password_hash = $4,
+              role = $5,
+              active = $6,
+              updated_at = now()
+          where id = $1
+          returning id, name, email, role, active, created_at, updated_at
+        `
+      : `
+          update tpv_users
+          set name = $2,
+              email = $3,
+              role = $4,
+              active = $5,
+              updated_at = now()
+          where id = $1
+          returning id, name, email, role, active, created_at, updated_at
+        `,
+    password
+      ? [id, trimmedName, normalizedEmail, hashPassword(password), normalizedRole, normalizedActive]
+      : [id, trimmedName, normalizedEmail, normalizedRole, normalizedActive],
+  );
+
+  return result.rows[0] ? normalizeUser(result.rows[0]) : null;
+}
+
+export async function deleteUser(id) {
+  await ensureUsersTable();
+
+  const current = await getUser(id);
+  if (!current) return false;
+
+  if (current.role === "admin" && current.active) {
+    const otherActiveAdmins = await countActiveAdmins({ excludeId: id });
+    if (otherActiveAdmins === 0) throw new Error("Debe quedar al menos un administrador activo");
+  }
+
+  const result = await query("delete from tpv_users where id = $1 returning id", [id]);
+  return result.rowCount > 0;
 }
 
 export async function authenticateUser(email, password) {

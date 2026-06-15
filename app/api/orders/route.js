@@ -1,6 +1,15 @@
-import { createOrder, listOrders } from "../../../Backend/orders";
+import { readSessionToken } from "../../../Backend/auth";
+import { createOrder, deleteOrdersByScope, deleteOrdersByTable, listOrders } from "../../../Backend/orders";
+import { getCustomerOrderingState } from "../../../Backend/settings";
 
 export const runtime = "nodejs";
+
+async function requireTpvSession(request) {
+  const token = request.cookies.get("tpv_session")?.value;
+  const session = await readSessionToken(token);
+  if (!session) throw new Error("No autorizado");
+  return session;
+}
 
 export async function GET(request) {
   try {
@@ -21,9 +30,50 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const payload = await request.json();
+
+    if (payload.source === "customer" || payload.source === "bar") {
+      const customerOrderingState = await getCustomerOrderingState();
+      if (payload.source === "customer" && !customerOrderingState.enabled) {
+        return Response.json(
+          {
+            error: customerOrderingState.blockedReason === "cash_closed"
+              ? "Caja cerrada. Actualmente no esta permitido realizar pedidos desde esta mesa."
+              : "Actualmente no esta permitido realizar pedidos desde esta mesa.",
+          },
+          { status: 403 },
+        );
+      }
+
+      if (payload.source === "bar" && !customerOrderingState.cashOpen) {
+        return Response.json(
+          { error: "Caja cerrada. Abre caja para realizar ventas en barra." },
+          { status: 403 },
+        );
+      }
+    }
+
     const order = await createOrder(payload);
 
     return Response.json({ order }, { status: 201 });
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const session = await requireTpvSession(request);
+    const { searchParams } = new URL(request.url);
+    const tableNumber = searchParams.get("tableNumber");
+    const scope = searchParams.get("scope");
+    if (!tableNumber && session.role !== "admin") {
+      throw new Error("No autorizado");
+    }
+    const deletedCount = tableNumber
+      ? await deleteOrdersByTable(tableNumber)
+      : await deleteOrdersByScope(scope);
+
+    return Response.json({ ok: true, deletedCount, orders: [] });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 400 });
   }

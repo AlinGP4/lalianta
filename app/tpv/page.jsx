@@ -20,6 +20,9 @@ export default function TpvHomePage() {
           <Link className="tpv-entry" href="/tpv/pedidos">
             <strong>TPV pedidos</strong>
           </Link>
+          <Link className="tpv-entry" href="/tpv/barra">
+            <strong>Venta en barra</strong>
+          </Link>
         </nav>
       </section>
     </main>

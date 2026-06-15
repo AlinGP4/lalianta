@@ -1,16 +1,16 @@
 export const categories = ["Todo", "Vinos", "Cervezas", "Copas", "Sin alcohol", "Comida"];
 
 export const products = [
-  { id: "vino-rioja", name: "Tinto Rioja", category: "Vinos", price: 3.8, stock: 18, active: true },
-  { id: "vermut", name: "Vermut casa", category: "Vinos", price: 3.2, stock: 22, active: true },
-  { id: "estrella", name: "Cerveza tubo", category: "Cervezas", price: 2.4, stock: 74, active: true },
-  { id: "ipa", name: "IPA artesana", category: "Cervezas", price: 4.5, stock: 16, active: true },
-  { id: "gin-tonic", name: "Gin tonic", category: "Copas", price: 7.5, stock: 31, active: true },
-  { id: "ron-cola", name: "Ron cola", category: "Copas", price: 6.8, stock: 28, active: true },
-  { id: "agua", name: "Agua", category: "Sin alcohol", price: 1.6, stock: 48, active: true },
-  { id: "coca-cola", name: "Coca-Cola", category: "Sin alcohol", price: 2.2, stock: 52, active: true },
-  { id: "bravas", name: "Bravas", category: "Comida", price: 5.5, stock: 20, active: true },
-  { id: "tabla-queso", name: "Tabla queso", category: "Comida", price: 12, stock: 8, active: true },
+  { id: "vino-rioja", name: "Tinto Rioja", category: "Vinos", price: 3.8, active: true },
+  { id: "vermut", name: "Vermut casa", category: "Vinos", price: 3.2, active: true },
+  { id: "estrella", name: "Cerveza tubo", category: "Cervezas", price: 2.4, active: true },
+  { id: "ipa", name: "IPA artesana", category: "Cervezas", price: 4.5, active: true },
+  { id: "gin-tonic", name: "Gin tonic", category: "Copas", price: 7.5, active: true },
+  { id: "ron-cola", name: "Ron cola", category: "Copas", price: 6.8, active: true },
+  { id: "agua", name: "Agua", category: "Sin alcohol", price: 1.6, active: true },
+  { id: "coca-cola", name: "Coca-Cola", category: "Sin alcohol", price: 2.2, active: true },
+  { id: "bravas", name: "Bravas", category: "Comida", price: 5.5, active: true },
+  { id: "tabla-queso", name: "Tabla queso", category: "Comida", price: 12, active: true },
 ];
 
 export const openOrders = [

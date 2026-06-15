@@ -1,10 +1,12 @@
 import { getDb, query } from "./db";
+import { ensureProductsTable, getProduct } from "./products";
 
 let ordersTableReady = false;
 
 async function ensureOrdersTables() {
   if (ordersTableReady) return;
 
+  await ensureProductsTable();
   await query("create extension if not exists pgcrypto");
   await query(`
     create table if not exists tpv_orders (
@@ -33,6 +35,7 @@ async function ensureOrdersTables() {
       created_at timestamptz not null default now()
     )
   `);
+  await query("alter table tpv_order_items add column if not exists product_id uuid references tpv_products(id) on delete set null");
   await query("alter table tpv_order_items add column if not exists source text not null default 'waiter'");
   ordersTableReady = true;
 }
@@ -56,6 +59,7 @@ function normalizeOrderItem(row) {
   return {
     id: row.id,
     orderId: row.order_id,
+    productId: row.product_id,
     productName: row.product_name,
     source: row.source,
     quantity: row.quantity,
@@ -65,25 +69,74 @@ function normalizeOrderItem(row) {
   };
 }
 
-function normalizeItems(items = []) {
-  return items.map((item) => {
+function normalizeCategory(value) {
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase("es-ES");
+}
+
+function isCubataProduct(product) {
+  return normalizeCategory(product.category) === "cubata" || product.name.toLocaleLowerCase("es-ES") === "cubata";
+}
+
+function assertMixerProduct(product, expectedCategory, label) {
+  if (!product) throw new Error(`${label} no existe`);
+  if (!product.active) throw new Error(`${product.name} no esta activo`);
+  if (normalizeCategory(product.category) !== expectedCategory) {
+    throw new Error(`${product.name} no esta en la categoria ${label}`);
+  }
+}
+
+async function normalizeItems(items = [], { source = "waiter" } = {}) {
+  const normalizedItems = [];
+
+  for (const item of items) {
     const quantity = Number.parseInt(item.quantity ?? item.qty ?? 0, 10);
-    const unitPriceCents = Number.parseInt(
+    const productId = String(item.productId ?? "").trim();
+    const alcoholProductId = String(item.alcoholProductId ?? "").trim();
+    const refrescoProductId = String(item.refrescoProductId ?? item.mixerProductId ?? "").trim();
+    let productName = String(item.productName ?? item.name ?? "").trim();
+    let unitPriceCents = Number.parseInt(
       item.unitPriceCents ?? Math.round(Number(item.price ?? 0) * 100),
       10,
     );
-    const productName = String(item.productName ?? item.name ?? "").trim();
+
+    if (productId) {
+      const product = await getProduct(productId);
+      if (!product) throw new Error("El producto no existe");
+      if (!product.active) throw new Error(`${product.name} no esta activo`);
+      productName = product.name;
+      unitPriceCents = product.priceCents;
+
+      if (source !== "bar" && isCubataProduct(product)) {
+        if (!alcoholProductId || !refrescoProductId) {
+          throw new Error("Selecciona alcohol y refresco para el cubata");
+        }
+
+        const [alcoholProduct, refrescoProduct] = await Promise.all([
+          getProduct(alcoholProductId),
+          getProduct(refrescoProductId),
+        ]);
+
+        assertMixerProduct(alcoholProduct, "alcohol", "Alcohol");
+        assertMixerProduct(refrescoProduct, "refresco", "Refresco");
+        productName = `${product.name} - ${alcoholProduct.name} + ${refrescoProduct.name}`;
+      }
+    }
 
     if (!productName) throw new Error("El producto es obligatorio");
     if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("La cantidad no es valida");
     if (!Number.isInteger(unitPriceCents) || unitPriceCents < 0) throw new Error("El precio no es valido");
 
-    return {
+    normalizedItems.push({
+      productId: productId || null,
       productName,
       quantity,
       unitPriceCents,
-    };
-  });
+    });
+  }
+
+  return normalizedItems;
 }
 
 function normalizeSettlementItems(items = []) {
@@ -112,7 +165,7 @@ function normalizeSettlementItems(items = []) {
 async function getOrderItems(orderId) {
   const result = await query(
     `
-      select id, order_id, product_name, source, quantity, unit_price_cents, created_at
+      select id, order_id, product_id, product_name, source, quantity, unit_price_cents, created_at
       from tpv_order_items
       where order_id = $1
       order by created_at asc
@@ -144,11 +197,16 @@ async function getOrderWithItems(orderId) {
 export async function createOrder(payload) {
   await ensureOrdersTables();
 
-  const tableNumber = Number.parseInt(payload.tableNumber, 10);
-  const source = payload.source === "customer" ? "customer" : "waiter";
-  const items = normalizeItems(payload.items);
+  const source = payload.source === "customer"
+    ? "customer"
+    : payload.source === "bar"
+    ? "bar"
+    : "waiter";
+  const isBarSale = source === "bar";
+  const tableNumber = isBarSale ? null : Number.parseInt(payload.tableNumber, 10);
+  const items = await normalizeItems(payload.items, { source });
 
-  if (!Number.isInteger(tableNumber) || tableNumber <= 0) throw new Error("La mesa no es valida");
+  if (!isBarSale && (!Number.isInteger(tableNumber) || tableNumber <= 0)) throw new Error("La mesa no es valida");
   if (items.length === 0) throw new Error("El pedido no tiene productos");
 
   const orderResult = await query(
@@ -159,12 +217,12 @@ export async function createOrder(payload) {
         $1,
         $2,
         $3,
-        'pending',
+        $4,
         0
       )
       returning id
     `,
-    [`Mesa ${tableNumber}`, tableNumber, source],
+    [isBarSale ? "Barra" : `Mesa ${tableNumber}`, tableNumber, source, isBarSale ? "paid" : "pending"],
   );
 
   const orderId = orderResult.rows[0].id;
@@ -178,17 +236,18 @@ export async function createOrder(payload) {
           and product_name = $2
           and source = $3
           and unit_price_cents = $5
+          and (($6::uuid is null and product_id is null) or product_id = $6::uuid)
       `,
-      [orderId, item.productName, source, item.quantity, item.unitPriceCents],
+      [orderId, item.productName, source, item.quantity, item.unitPriceCents, item.productId],
     );
 
     if (updateResult.rowCount === 0) {
       await query(
         `
-          insert into tpv_order_items (order_id, product_name, source, quantity, unit_price_cents)
-          values ($1, $2, $3, $4, $5)
+          insert into tpv_order_items (order_id, product_id, product_name, source, quantity, unit_price_cents)
+          values ($1, $2, $3, $4, $5, $6)
         `,
-        [orderId, item.productName, source, item.quantity, item.unitPriceCents],
+        [orderId, item.productId, item.productName, source, item.quantity, item.unitPriceCents],
       );
     }
   }
@@ -230,6 +289,7 @@ export async function settleDeliveredItems(payload) {
         select
           oi.id,
           oi.order_id,
+          oi.product_id,
           oi.product_name,
           oi.source,
           oi.quantity,
@@ -252,6 +312,7 @@ export async function settleDeliveredItems(payload) {
         id: row.id,
         orderId: row.order_id,
         productName: row.product_name,
+        productId: row.product_id,
         source: row.source,
         quantity: row.quantity,
         unitPriceCents: row.unit_price_cents,
@@ -306,17 +367,18 @@ export async function settleDeliveredItems(payload) {
               and product_name = $2
               and source = $3
               and unit_price_cents = $5
+              and (($6::uuid is null and product_id is null) or product_id = $6::uuid)
           `,
-          [paidOrderId, item.productName, item.source, movedQuantity, item.unitPriceCents],
+          [paidOrderId, item.productName, item.source, movedQuantity, item.unitPriceCents, availableRow.productId],
         );
 
         if (paidUpdateResult.rowCount === 0) {
           await client.query(
             `
-              insert into tpv_order_items (order_id, product_name, source, quantity, unit_price_cents)
-              values ($1, $2, $3, $4, $5)
+              insert into tpv_order_items (order_id, product_id, product_name, source, quantity, unit_price_cents)
+              values ($1, $2, $3, $4, $5, $6)
             `,
-            [paidOrderId, item.productName, item.source, movedQuantity, item.unitPriceCents],
+            [paidOrderId, availableRow.productId, item.productName, item.source, movedQuantity, item.unitPriceCents],
           );
         }
 
@@ -399,7 +461,7 @@ export async function listOrders({ status, source, tableNumber, includeItems = f
 
   const itemsResult = await query(
     `
-      select id, order_id, product_name, source, quantity, unit_price_cents, created_at
+      select id, order_id, product_id, product_name, source, quantity, unit_price_cents, created_at
       from tpv_order_items
       where order_id = any($1::uuid[])
       order by created_at asc
@@ -418,6 +480,51 @@ export async function listOrders({ status, source, tableNumber, includeItems = f
     ...order,
     items: itemsByOrder.get(order.id) ?? [],
   }));
+}
+
+export async function deleteOrdersByTable(tableNumber) {
+  await ensureOrdersTables();
+
+  const normalizedTableNumber = Number.parseInt(tableNumber, 10);
+  if (!Number.isInteger(normalizedTableNumber) || normalizedTableNumber <= 0) {
+    throw new Error("La mesa no es valida");
+  }
+
+  const result = await query(
+    "delete from tpv_orders where table_number = $1 returning id",
+    [normalizedTableNumber],
+  );
+
+  return result.rowCount;
+}
+
+export async function deleteOrdersByScope(scope) {
+  await ensureOrdersTables();
+
+  if (scope === "pending") {
+    const result = await query(
+      "delete from tpv_orders where status in ('pending', 'preparing') returning id",
+    );
+    return result.rowCount;
+  }
+
+  if (scope === "today") {
+    const result = await query(
+      `
+        delete from tpv_orders
+        where created_at >= date_trunc('day', now())
+        returning id
+      `,
+    );
+    return result.rowCount;
+  }
+
+  if (scope === "all") {
+    const result = await query("delete from tpv_orders returning id");
+    return result.rowCount;
+  }
+
+  throw new Error("El alcance no es valido");
 }
 
 export async function updateOrderStatus(id, status) {
