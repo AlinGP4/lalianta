@@ -6,8 +6,48 @@ import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalog
 import { formatPrice } from "./data";
 
 const TABLE_STORAGE_KEY = "lalianta_customer_table";
-const TABLE_STORAGE_TTL = 12 * 60 * 60 * 1000;
 const openAccountStatuses = new Set(["pending", "preparing", "delivered"]);
+
+function getNextSixAmExpiration(now = new Date()) {
+  const expiresAt = new Date(now);
+  expiresAt.setHours(6, 0, 0, 0);
+  if (now >= expiresAt) expiresAt.setDate(expiresAt.getDate() + 1);
+  return expiresAt.getTime();
+}
+
+function readStoredTableNumber() {
+  if (typeof window === "undefined") return "";
+
+  try {
+    const rawValue = window.localStorage.getItem(TABLE_STORAGE_KEY);
+    if (!rawValue) return "";
+
+    const saved = JSON.parse(rawValue);
+    if (!saved?.tableNumber || Date.now() >= Number(saved.expiresAt ?? 0)) {
+      window.localStorage.removeItem(TABLE_STORAGE_KEY);
+      return "";
+    }
+
+    return String(saved.tableNumber);
+  } catch {
+    window.localStorage.removeItem(TABLE_STORAGE_KEY);
+    return "";
+  }
+}
+
+function storeTableNumber(tableNumber) {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify({
+    expiresAt: getNextSixAmExpiration(),
+    tableNumber,
+  }));
+}
+
+function clearStoredTableNumber() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TABLE_STORAGE_KEY);
+}
 
 function isCubataProduct(product) {
   return product.category?.toLocaleLowerCase("es-ES") === "cubata" || product.name?.toLocaleLowerCase("es-ES") === "cubata";
@@ -24,9 +64,9 @@ function buildCubataItem(product, alcoholProduct, refrescoProduct) {
   };
 }
 
-export default function CustomerOrder({ tableNumber = "" }) {
-  const [selectedTableNumber, setSelectedTableNumber] = useState(String(tableNumber || ""));
-  const [tableDraft, setTableDraft] = useState(String(tableNumber || ""));
+export default function CustomerOrder() {
+  const [selectedTableNumber, setSelectedTableNumber] = useState("");
+  const [tableDraft, setTableDraft] = useState("");
   const [tableModalOpen, setTableModalOpen] = useState(true);
   const [tableList, setTableList] = useState([]);
   const [tablesLoading, setTablesLoading] = useState(true);
@@ -75,21 +115,38 @@ export default function CustomerOrder({ tableNumber = "" }) {
   }
 
   useEffect(() => {
-    const qrTableNumber = String(tableNumber || "");
     const storedTableNumber = readStoredTableNumber();
-    const initialTableNumber = qrTableNumber || storedTableNumber;
+    if (!storedTableNumber) return;
 
-    setSelectedTableNumber(initialTableNumber);
-    setTableDraft(initialTableNumber);
-    setTableModalOpen(!storedTableNumber || Boolean(qrTableNumber && qrTableNumber !== storedTableNumber));
-  }, [tableNumber]);
+    setSelectedTableNumber(storedTableNumber);
+    setTableDraft(storedTableNumber);
+    setTableModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!selectedTableNumber) return undefined;
+
+    const timeout = window.setTimeout(() => {
+      clearStoredTableNumber();
+      setSelectedTableNumber("");
+      setTableDraft("");
+      setCart([]);
+      setTableOrders([]);
+      setSentCode("");
+      setCubataDraft(null);
+      setTableModalOpen(true);
+    }, Math.max(0, getNextSixAmExpiration() - Date.now()));
+
+    return () => window.clearTimeout(timeout);
+  }, [selectedTableNumber]);
 
   useEffect(() => {
     async function loadTables() {
       setTablesLoading(true);
 
       try {
-        const response = await fetch("/api/tables?includeInactive=false", { cache: "no-store" });
+        const response = await fetch("/api/tables", { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "No se pudieron cargar las mesas");
         setTableList(data.tables);
@@ -220,8 +277,7 @@ export default function CustomerOrder({ tableNumber = "" }) {
     setCubataDraft(null);
 
     if (typeof window !== "undefined") {
-      const nextUrl = nextTableNumber ? `/pedido?mesa=${nextTableNumber}` : "/pedido";
-      window.history.replaceState(null, "", nextUrl);
+      window.history.replaceState(null, "", "/pedido");
     }
   }
 
@@ -730,34 +786,6 @@ export default function CustomerOrder({ tableNumber = "" }) {
       )}
     </main>
   );
-}
-
-function readStoredTableNumber() {
-  if (typeof window === "undefined") return "";
-
-  try {
-    const rawValue = window.localStorage.getItem(TABLE_STORAGE_KEY);
-    if (!rawValue) return "";
-    const saved = JSON.parse(rawValue);
-    if (!saved?.tableNumber || Date.now() > Number(saved.expiresAt ?? 0)) {
-      window.localStorage.removeItem(TABLE_STORAGE_KEY);
-      return "";
-    }
-
-    return String(saved.tableNumber);
-  } catch {
-    window.localStorage.removeItem(TABLE_STORAGE_KEY);
-    return "";
-  }
-}
-
-function storeTableNumber(tableNumber) {
-  if (typeof window === "undefined") return;
-
-  window.localStorage.setItem(TABLE_STORAGE_KEY, JSON.stringify({
-    expiresAt: Date.now() + TABLE_STORAGE_TTL,
-    tableNumber,
-  }));
 }
 
 function CustomerTicketContent({

@@ -3863,39 +3863,54 @@
 
   .tpv-print-area {
     position: absolute;
-    inset: 0 auto auto 0;
+    inset: 0;
     display: grid !important;
-    width: 100%;
-    grid-template-columns: repeat(3, 58mm);
-    gap: 7mm;
+    width: 210mm;
+    min-height: 297mm;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 1fr;
+    gap: 6mm;
     padding: 10mm;
     background: #ffffff;
   }
 
   .tpv-print-qr {
     display: grid;
-    min-height: 78mm;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 0;
+    grid-template-rows: 7mm 44mm 7mm;
     align-content: center;
     justify-items: center;
-    gap: 3mm;
-    padding: 6mm;
-    border: 1px solid #111111;
+    gap: 1.5mm;
+    padding: 2mm;
+    border: 1px dashed #999999;
     break-inside: avoid;
     color: #111111;
     font-family: Manrope, Arial, sans-serif;
     text-align: center;
   }
 
+  .tpv-print-qr svg {
+    align-self: center;
+    width: 42mm;
+    max-width: 100%;
+    height: auto;
+  }
+
   .tpv-print-qr h2 {
+    align-self: center;
     margin: 0;
     color: #111111;
-    font-size: 24px;
+    font-size: 16px;
     line-height: 1;
   }
 
   .tpv-print-qr p {
+    align-self: center;
     margin: 0;
     color: #333333;
-    font-size: 10px;
+    font-size: 8.5px;
+    line-height: 1.15;
   }
 }

@@ -452,7 +452,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     setError("");
 
     try {
-      const response = await fetch("/api/tables?includeInactive=false", { cache: "no-store" });
+      const response = await fetch("/api/tables", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudieron cargar las mesas");
       setTables(data.tables);

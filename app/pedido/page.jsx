@@ -8,9 +8,6 @@ export const metadata = {
   },
 };
 
-export default async function CustomerOrderPage({ searchParams }) {
-  const params = await searchParams;
-  const tableNumber = params?.mesa || "";
-
-  return <CustomerOrder tableNumber={tableNumber} />;
+export default function CustomerOrderPage() {
+  return <CustomerOrder />;
 }

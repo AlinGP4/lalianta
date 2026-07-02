@@ -21,6 +21,8 @@ const printQrLogo = {
   excavate: true,
 };
 
+const PRINT_QR_COPIES = 8;
+
 function getFriendlyTableError(message) {
   if (message?.includes("tpv_tables_table_number_key") || message?.includes("duplicate key value")) {
     return "Ya existe una mesa con ese número.";
@@ -105,8 +107,8 @@ export default function TablesAdminPage() {
     return `${origin}/tpv/pedidos?mesa=${table.number}`;
   }
 
-  function getCustomerTableUrl(table) {
-    return `${origin}/pedido?mesa=${table.number}`;
+  function getCustomerQrUrl() {
+    return `${origin}/pedido`;
   }
 
   async function createTable(tableNumber = "") {
@@ -266,7 +268,7 @@ export default function TablesAdminPage() {
   }
 
   async function copyTableUrl(table) {
-    const url = getCustomerTableUrl(table);
+    const url = getCustomerQrUrl();
     await navigator.clipboard.writeText(url);
     setCopiedId(table.id);
     window.setTimeout(() => setCopiedId(""), 1400);
@@ -432,7 +434,7 @@ export default function TablesAdminPage() {
               <div className="tpv-qr-box">
                 {origin && (
                   <QRCodeSVG
-                    value={getCustomerTableUrl(table)}
+                    value={getCustomerQrUrl()}
                     size={200}
                     level="H"
                     includeMargin
@@ -441,7 +443,7 @@ export default function TablesAdminPage() {
                 )}
               </div>
 
-              <p className="tpv-table-url">{origin ? getCustomerTableUrl(table) : `/pedido?mesa=${table.number}`}</p>
+              <p className="tpv-table-url">{origin ? getCustomerQrUrl() : "/pedido"}</p>
 
               <a className="tpv-table-open" href={origin ? getWaiterTableUrl(table) : `/tpv/pedidos?mesa=${table.number}`}>
                 Abrir TPV mesa
@@ -553,17 +555,17 @@ export default function TablesAdminPage() {
       )}
 
       <section className="tpv-print-area" ref={printRef} aria-label="QRs imprimibles">
-        {tables.filter((table) => table.active).map((table) => (
-          <article className="tpv-print-qr" key={table.id}>
-            <h2>Mesa {table.number}</h2>
+        {Array.from({ length: PRINT_QR_COPIES }, (_, index) => (
+          <article className="tpv-print-qr" key={index}>
+            <h2>La Lianta</h2>
             <QRCodeSVG
-              value={origin ? getCustomerTableUrl(table) : `/pedido?mesa=${table.number}`}
-              size={180}
+              value={origin ? getCustomerQrUrl() : "/pedido"}
+              size={220}
               level="H"
               includeMargin
               imageSettings={printQrLogo}
             />
-            <p>Escanea para abrir pedidos</p>
+            <p>Escanea y selecciona tu mesa</p>
           </article>
         ))}
       </section>

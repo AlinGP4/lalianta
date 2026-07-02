@@ -6,10 +6,10 @@ Codigo de interfaz para el terminal punto de venta.
 
 - Administracion: pensada para tablet y desktop. `/tpv/admin` redirige a productos.
 - Productos: CRUD administrativo de productos en `/tpv/admin/productos`.
-- Mesas: alta incremental de mesas, QR e impresion de QRs en lote en `/tpv/admin/mesas`.
+- Mesas: alta incremental de mesas y QR unico de cliente en `/tpv/admin/mesas`.
 - Historico: panel propio con colas independientes de Cocina y Barra en `/tpv/historico`.
 - Pedidos camarero: pensada para movil interno. Ruta: `/tpv/pedidos`.
-- Pedido cliente: ruta del QR para que el cliente pida desde mesa. Ruta: `/pedido?mesa=N`.
+- Pedido cliente: ruta del QR unico. El cliente selecciona mesa al entrar. Ruta: `/pedido`.
 
 Ambas zonas deben ser privadas, protegidas por autenticacion y marcadas como `noindex`.
 
@@ -20,7 +20,7 @@ Ambas zonas deben ser privadas, protegidas por autenticacion y marcadas como `no
 - Gestion de mesas, QRs e impresion en `/tpv/admin/mesas`.
 - Historico de pedidos con completado independiente para Cocina y Barra en `/tpv/historico`.
 - TPV de camarero en `/tpv/pedidos`.
-- Pedido cliente por QR en `/pedido?mesa=N`.
+- Pedido cliente por QR en `/pedido`.
 - Estados de pedido actuales: `pending`, `delivered`, `paid`.
 - Cobro completo y cobro por separado ya visibles en la TPV.
 
@@ -132,13 +132,13 @@ Permisos previstos:
 #### Cliente
 
 - No tiene usuario.
-- Solo interactua desde el QR de su mesa.
+- Interactua desde el QR unico y selecciona su mesa al entrar.
 - Puede pedir unicamente si la caja esta abierta y el permiso de pedidos cliente esta activado.
 
 ## Notas de implementacion
 
 - La TPV seguira en zona privada y `noindex`.
-- El pedido cliente seguira entrando por QR a `/pedido?mesa=N`.
+- El pedido cliente seguira entrando por QR a `/pedido`; la mesa se selecciona al inicio.
 - El backend seguira dentro del mismo proyecto Next.js, con logica en `Backend` y endpoints en `app/api`.
 - Las reglas de caja afectaran tanto a la TPV como al pedido cliente.
 - Hasta tener autenticacion real, la vista de caja ocultara importes por defecto con `*****`.
@@ -148,5 +148,5 @@ Permisos previstos:
 - `/tpv/login`: acceso de usuarios privados.
 - `/tpv/setup`: alta inicial del primer administrador.
 - `/tpv/admin/*`: solo administradores.
-- `/tpv/historico`: administradores, barra y cocina.
+- `/tpv/historico`: administradores, barra, cocina y camareros.
 - `/tpv/pedidos`: administradores y camareros.
