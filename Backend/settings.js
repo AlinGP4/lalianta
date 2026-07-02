@@ -35,6 +35,11 @@ async function setSetting(key, value) {
   );
 }
 
+async function deleteSetting(key) {
+  await ensureSettingsTable();
+  await query("delete from tpv_settings where key = $1", [key]);
+}
+
 export async function isCustomerOrderingEnabled() {
   const value = await getSetting("customer_ordering_enabled", "true");
   return value === "true";
@@ -67,4 +72,38 @@ export async function getCustomerOrderingState() {
     enabled: cashOpen && customerOrderingEnabled,
     blockedReason: !cashOpen ? "cash_closed" : customerOrderingEnabled ? "" : "qr_blocked",
   };
+}
+
+export async function getCustomerQrPopup() {
+  const value = await getSetting("customer_qr_popup", "");
+  if (!value) return { enabled: false, imageUrl: "", fileName: "" };
+
+  try {
+    const popup = JSON.parse(value);
+    return {
+      enabled: Boolean(popup.imageUrl) && !String(popup.imageUrl).startsWith("data:"),
+      fileName: popup.fileName || "",
+      imageUrl: String(popup.imageUrl || "").startsWith("data:") ? "" : popup.imageUrl || "",
+      mimeType: popup.mimeType || "",
+      updatedAt: popup.updatedAt || "",
+    };
+  } catch {
+    return { enabled: false, imageUrl: "", fileName: "" };
+  }
+}
+
+export async function setCustomerQrPopup({ fileName, imageUrl, mimeType }) {
+  await setSetting("customer_qr_popup", JSON.stringify({
+    fileName,
+    imageUrl,
+    mimeType,
+    updatedAt: new Date().toISOString(),
+  }));
+
+  return getCustomerQrPopup();
+}
+
+export async function clearCustomerQrPopup() {
+  await deleteSetting("customer_qr_popup");
+  return getCustomerQrPopup();
 }

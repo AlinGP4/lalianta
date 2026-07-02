@@ -1,4 +1,4 @@
-import { createNextTable, listTables } from "../../../Backend/tables";
+import { createNextTable, createTable, listTables, setAllTablesActive } from "../../../Backend/tables";
 
 export const runtime = "nodejs";
 
@@ -14,10 +14,28 @@ export async function GET(request) {
   }
 }
 
-export async function POST() {
+export async function POST(request) {
   try {
-    const table = await createNextTable();
+    let payload = {};
+    try {
+      payload = await request.json();
+    } catch {
+      payload = {};
+    }
+
+    const rawTableName = String(payload.tableName ?? payload.name ?? payload.tableNumber ?? "").trim();
+    const table = rawTableName ? await createTable(rawTableName) : await createNextTable();
     return Response.json({ table }, { status: 201 });
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const payload = await request.json();
+    const tables = await setAllTablesActive(payload.active);
+    return Response.json({ tables });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 400 });
   }

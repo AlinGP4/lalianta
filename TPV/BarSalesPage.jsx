@@ -3,7 +3,9 @@
 import { Minus, Plus, ReceiptText, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
 import { formatPrice } from "./data";
+import LogoutButton from "./LogoutButton";
 
 export default function BarSalesPage() {
   const [category, setCategory] = useState("Todo");
@@ -15,23 +17,24 @@ export default function BarSalesPage() {
   const [lastSale, setLastSale] = useState(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadProducts() {
-      setProductsLoading(true);
-      setError("");
+  async function loadProducts({ showLoading = false } = {}) {
+    if (showLoading) setProductsLoading(true);
+    setError("");
 
-      try {
-        const response = await fetch("/api/products?includeInactive=false", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar los productos");
-        setProducts(data.products);
-      } catch (requestError) {
-        setError(requestError.message);
-      } finally {
-        setProductsLoading(false);
-      }
+    try {
+      const response = await fetch("/api/products?includeInactive=false", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudieron cargar los productos");
+      setProducts(data.products);
+      setCart((current) => pruneCartByVisibleProducts(current, data.products));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      if (showLoading) setProductsLoading(false);
     }
+  }
 
+  useEffect(() => {
     async function loadCashState() {
       try {
         const response = await fetch("/api/settings/cash-register", { cache: "no-store" });
@@ -44,12 +47,18 @@ export default function BarSalesPage() {
       }
     }
 
-    loadProducts();
+    loadProducts({ showLoading: true });
     loadCashState();
   }, []);
 
+  useEffect(() => (
+    subscribeToCatalogChanges(() => {
+      loadProducts();
+    })
+  ), []);
+
   const categories = useMemo(() => (
-    ["Todo", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort()]
+    ["Todo", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))]
   ), [products]);
 
   const filteredProducts = useMemo(() => {
@@ -61,7 +70,7 @@ export default function BarSalesPage() {
   const lineCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
   function addProduct(product) {
-    if (!cashOpen) return;
+    if (!cashOpen || product.soldOut) return;
     setLastSale(null);
     setCart((current) => {
       const existing = current.find((item) => item.id === product.id);
@@ -114,12 +123,15 @@ export default function BarSalesPage() {
   return (
     <main className="tpv-phone tpv-waiter-order tpv-bar-sale">
       <header className="tpv-phone-head">
-        <Link className="tpv-phone-back" href="/tpv" aria-label="Volver">{"<"}</Link>
+        <Link className="tpv-phone-home" href="/tpv">Inicio</Link>
         <div>
           <p className="tpv-kicker">TPV Barra</p>
           <h1>Venta en barra</h1>
         </div>
-        <Link className="tpv-phone-admin" href="/tpv/admin">Admin</Link>
+        <div className="tpv-phone-actions">
+          <Link className="tpv-phone-admin" href="/tpv/admin/productos">Admin</Link>
+          <LogoutButton className="tpv-phone-logout" />
+        </div>
       </header>
 
       {error && <div className="tpv-error">{error}</div>}
@@ -175,14 +187,15 @@ export default function BarSalesPage() {
             )}
             {filteredProducts.map((product) => (
               <button
-                className="tpv-tile"
+                className={product.soldOut ? "tpv-tile is-sold-out" : "tpv-tile"}
                 type="button"
                 key={product.id}
-                disabled={!cashOpen}
+                disabled={!cashOpen || product.soldOut}
                 onClick={() => addProduct(product)}
               >
                 <span>{product.category}</span>
                 <strong>{product.name}</strong>
+                {product.soldOut && <small className="tpv-tile-stock">Agotado</small>}
                 <em>{formatPrice(product.price)}</em>
               </button>
             ))}

@@ -2,6 +2,12 @@ import { readSessionToken } from "../../../../Backend/auth";
 
 export const runtime = "nodejs";
 
+function getHistoryAreaForRole(role, fallbackArea = null) {
+  if (role === "cocina") return "kitchen";
+  if (role === "barra") return "bar";
+  return fallbackArea ?? null;
+}
+
 export async function GET(request) {
   const token = request.cookies.get("tpv_session")?.value;
   const session = await readSessionToken(token);
@@ -14,8 +20,8 @@ export async function GET(request) {
     user: {
       id: session.sub,
       name: session.name,
-      email: session.email,
       role: session.role,
+      historyArea: getHistoryAreaForRole(session.role, session.historyArea),
     },
   });
 }

@@ -13,10 +13,25 @@ export async function ensureProductsTable() {
       name text not null,
       category text not null,
       price_cents integer not null check (price_cents >= 0),
+      sort_order integer not null default 0,
+      sold_out boolean not null default false,
       active boolean not null default true,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
+  `);
+  await query("alter table tpv_products add column if not exists sort_order integer not null default 0");
+  await query("alter table tpv_products add column if not exists sold_out boolean not null default false");
+  await query(`
+    with ranked as (
+      select id, row_number() over (order by created_at desc)::integer as next_order
+      from tpv_products
+      where sort_order = 0
+    )
+    update tpv_products p
+    set sort_order = ranked.next_order
+    from ranked
+    where p.id = ranked.id
   `);
 
   productsTableReady = true;
@@ -29,6 +44,8 @@ function normalizeProduct(row) {
     category: row.category,
     priceCents: row.price_cents,
     price: row.price_cents / 100,
+    sortOrder: row.sort_order,
+    soldOut: row.sold_out,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -40,6 +57,7 @@ async function normalizePayload(payload) {
   const category = String(payload.category ?? "").trim();
   const rawPriceCents = payload.priceCents ?? Math.round(Number(payload.price ?? 0) * 100);
   const priceCents = Number.parseInt(rawPriceCents, 10);
+  const soldOut = payload.soldOut ?? payload.sold_out ?? false;
   const active = payload.active ?? true;
 
   if (!name) throw new Error("El nombre es obligatorio");
@@ -53,6 +71,7 @@ async function normalizePayload(payload) {
     name,
     category: savedCategory.name,
     priceCents,
+    soldOut: Boolean(soldOut),
     active: Boolean(active),
   };
 }
@@ -60,13 +79,26 @@ async function normalizePayload(payload) {
 export async function listProducts({ includeInactive = true } = {}) {
   await ensureProductsTable();
 
+  const categoriesTableResult = await query("select to_regclass('public.tpv_categories') as table_name");
+  const hasCategoriesTable = Boolean(categoriesTableResult.rows[0]?.table_name);
   const result = await query(
-    `
-      select id, name, category, price_cents, active, created_at, updated_at
-      from tpv_products
-      where ($1::boolean = true or active = true)
-      order by created_at desc
-    `,
+    hasCategoriesTable
+      ? `
+        select p.id, p.name, p.category, p.price_cents, p.sort_order, p.sold_out, p.active, p.created_at, p.updated_at
+        from tpv_products p
+        left join tpv_categories c on lower(c.name) = lower(p.category)
+        where ($1::boolean = true or (p.active = true and coalesce(c.active, true) = true))
+        order by
+          coalesce(c.sort_order, 999999) asc,
+          p.sort_order asc,
+          p.created_at desc
+      `
+      : `
+        select id, name, category, price_cents, sort_order, sold_out, active, created_at, updated_at
+        from tpv_products
+        where ($1::boolean = true or active = true)
+        order by sort_order asc, created_at desc
+      `,
     [includeInactive],
   );
 
@@ -78,7 +110,7 @@ export async function getProduct(id) {
 
   const result = await query(
     `
-      select id, name, category, price_cents, active, created_at, updated_at
+      select id, name, category, price_cents, sort_order, sold_out, active, created_at, updated_at
       from tpv_products
       where id = $1
     `,
@@ -94,11 +126,11 @@ export async function createProduct(payload) {
 
   const result = await query(
     `
-      insert into tpv_products (name, category, price_cents, active)
-      values ($1, $2, $3, $4)
-      returning id, name, category, price_cents, active, created_at, updated_at
+      insert into tpv_products (name, category, price_cents, sort_order, sold_out, active)
+      values ($1, $2, $3, (select coalesce(max(sort_order), 0) + 1 from tpv_products), $4, $5)
+      returning id, name, category, price_cents, sort_order, sold_out, active, created_at, updated_at
     `,
-    [product.name, product.category, product.priceCents, product.active],
+    [product.name, product.category, product.priceCents, product.soldOut, product.active],
   );
 
   return normalizeProduct(result.rows[0]);
@@ -114,15 +146,57 @@ export async function updateProduct(id, payload) {
       set name = $2,
           category = $3,
           price_cents = $4,
-          active = $5,
+          sold_out = $5,
+          active = $6,
           updated_at = now()
       where id = $1
-      returning id, name, category, price_cents, active, created_at, updated_at
+      returning id, name, category, price_cents, sort_order, sold_out, active, created_at, updated_at
     `,
-    [id, product.name, product.category, product.priceCents, product.active],
+    [id, product.name, product.category, product.priceCents, product.soldOut, product.active],
   );
 
   return result.rows[0] ? normalizeProduct(result.rows[0]) : null;
+}
+
+export async function setProductSoldOut(id, soldOut) {
+  await ensureProductsTable();
+
+  const result = await query(
+    `
+      update tpv_products
+      set sold_out = $2,
+          updated_at = now()
+      where id = $1
+      returning id, name, category, price_cents, sort_order, sold_out, active, created_at, updated_at
+    `,
+    [id, Boolean(soldOut)],
+  );
+
+  return result.rows[0] ? normalizeProduct(result.rows[0]) : null;
+}
+
+export async function reorderProducts(productIds = []) {
+  await ensureProductsTable();
+
+  const normalizedIds = productIds.map((id) => String(id ?? "").trim()).filter(Boolean);
+  if (normalizedIds.length === 0) throw new Error("El orden de productos no es válido");
+
+  await query(
+    `
+      with ordered as (
+        select id, position::integer as sort_order
+        from unnest($1::uuid[]) with ordinality as item(id, position)
+      )
+      update tpv_products p
+      set sort_order = ordered.sort_order,
+          updated_at = now()
+      from ordered
+      where p.id = ordered.id
+    `,
+    [normalizedIds],
+  );
+
+  return listProducts();
 }
 
 export async function deleteProduct(id) {

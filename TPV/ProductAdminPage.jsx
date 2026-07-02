@@ -10,7 +10,7 @@ export default function ProductAdminPage() {
           <h1>Productos</h1>
         </div>
         <div className="tpv-head-actions">
-          <Link className="tpv-button tpv-button-secondary" href="/tpv/admin">Volver al panel</Link>
+          <Link className="tpv-button tpv-button-secondary" href="/tpv">Inicio TPV</Link>
         </div>
       </header>
 

@@ -4,9 +4,10 @@ Codigo de interfaz para el terminal punto de venta.
 
 ## Superficies
 
-- Administracion: pensada para tablet y desktop. El panel en `/tpv/admin` es solo dashboards con Chart.js.
+- Administracion: pensada para tablet y desktop. `/tpv/admin` redirige a productos.
 - Productos: CRUD administrativo de productos en `/tpv/admin/productos`.
 - Mesas: alta incremental de mesas, QR e impresion de QRs en lote en `/tpv/admin/mesas`.
+- Historico: panel propio con colas independientes de Cocina y Barra en `/tpv/historico`.
 - Pedidos camarero: pensada para movil interno. Ruta: `/tpv/pedidos`.
 - Pedido cliente: ruta del QR para que el cliente pida desde mesa. Ruta: `/pedido?mesa=N`.
 
@@ -14,9 +15,10 @@ Ambas zonas deben ser privadas, protegidas por autenticacion y marcadas como `no
 
 ## Estado actual
 
-- Admin con dashboards en `/tpv/admin`.
+- Admin sin dashboard/panel; la entrada principal es `/tpv/admin/productos`.
 - CRUD de productos en `/tpv/admin/productos`.
 - Gestion de mesas, QRs e impresion en `/tpv/admin/mesas`.
+- Historico de pedidos con completado independiente para Cocina y Barra en `/tpv/historico`.
 - TPV de camarero en `/tpv/pedidos`.
 - Pedido cliente por QR en `/pedido?mesa=N`.
 - Estados de pedido actuales: `pending`, `delivered`, `paid`.
@@ -89,7 +91,7 @@ Resumen de comportamiento:
 
 ### 6. Historico y auditoria
 
-Se anadira historico para poder revisar:
+El historico de pedidos ya esta disponible en `/tpv/historico`. La auditoria de caja queda pendiente para revisar:
 
 - Sesiones de caja abiertas y cerradas.
 - Tickets generados durante cada sesion.
@@ -98,10 +100,12 @@ Se anadira historico para poder revisar:
 
 ### 7. Roles de usuario
 
-El sistema tendra tres tipos de usuario:
+El sistema tendra cinco tipos de usuario:
 
 - `Administrador`
-- `Trabajador`
+- `Barra`
+- `Cocina`
+- `Camarero`
 - `Cliente`
 
 Permisos previstos:
@@ -109,17 +113,21 @@ Permisos previstos:
 #### Administrador
 
 - Gestionar productos, mesas, caja y configuracion.
-- Ver dashboards.
+- Ver historicos y metricas.
 - Ver totales, importes, arqueo y cierres.
 - Ver historicos y metricas completas.
 
-#### Trabajador
+#### Barra
 
-- Crear pedidos y gestionar cuentas.
-- Operar la TPV de mesa.
-- Abrir caja y trabajar con la operativa diaria.
-- No debe ver dashboards financieros ni totales sensibles.
-- En caja, los importes deben salir ocultos por defecto.
+- Ver y completar el historico de barra.
+
+#### Cocina
+
+- Ver y completar el historico de cocina.
+
+#### Camarero
+
+- Crear pedidos desde `/tpv/pedidos` mesa por mesa.
 
 #### Cliente
 
@@ -140,4 +148,5 @@ Permisos previstos:
 - `/tpv/login`: acceso de usuarios privados.
 - `/tpv/setup`: alta inicial del primer administrador.
 - `/tpv/admin/*`: solo administradores.
-- `/tpv/pedidos`: administradores y trabajadores.
+- `/tpv/historico`: administradores, barra y cocina.
+- `/tpv/pedidos`: administradores y camareros.

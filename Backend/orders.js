@@ -1,5 +1,7 @@
 import { getDb, query } from "./db";
+import { getCubataMixerIds } from "./cubatas";
 import { ensureProductsTable, getProduct } from "./products";
+import { getTableByNumber } from "./tables";
 
 let ordersTableReady = false;
 
@@ -23,6 +25,16 @@ async function ensureOrdersTables() {
   `);
   await query("alter table tpv_orders add column if not exists table_number integer");
   await query("alter table tpv_orders add column if not exists source text not null default 'waiter'");
+  await query("alter table tpv_orders add column if not exists kitchen_status text not null default 'pending'");
+  await query("alter table tpv_orders add column if not exists bar_status text not null default 'pending'");
+  await query(`
+    update tpv_orders
+    set kitchen_status = 'completed',
+        bar_status = 'completed'
+    where status in ('delivered', 'paid', 'cancelled')
+      and kitchen_status = 'pending'
+      and bar_status = 'pending'
+  `);
   await query(`
     create table if not exists tpv_order_items (
       id uuid primary key default gen_random_uuid(),
@@ -48,6 +60,8 @@ function normalizeOrder(row) {
     tableNumber: row.table_number,
     source: row.source,
     status: row.status,
+    kitchenStatus: row.kitchen_status,
+    barStatus: row.bar_status,
     totalCents: row.total_cents,
     total: row.total_cents / 100,
     createdAt: row.created_at,
@@ -82,6 +96,7 @@ function isCubataProduct(product) {
 function assertMixerProduct(product, expectedCategory, label) {
   if (!product) throw new Error(`${label} no existe`);
   if (!product.active) throw new Error(`${product.name} no está activo`);
+  if (product.soldOut) throw new Error(`${product.name} está agotado`);
   if (normalizeCategory(product.category) !== expectedCategory) {
     throw new Error(`${product.name} no está en la categoría ${label}`);
   }
@@ -105,6 +120,7 @@ async function normalizeItems(items = [], { source = "waiter" } = {}) {
       const product = await getProduct(productId);
       if (!product) throw new Error("El producto no existe");
       if (!product.active) throw new Error(`${product.name} no está activo`);
+      if (product.soldOut) throw new Error(`${product.name} está agotado`);
       productName = product.name;
       unitPriceCents = product.priceCents;
 
@@ -120,6 +136,10 @@ async function normalizeItems(items = [], { source = "waiter" } = {}) {
 
         assertMixerProduct(alcoholProduct, "alcohol", "Alcohol");
         assertMixerProduct(refrescoProduct, "refresco", "Refresco");
+        const configuredMixerIds = await getCubataMixerIds(alcoholProductId);
+        if (configuredMixerIds.length > 0 && !configuredMixerIds.includes(refrescoProductId)) {
+          throw new Error(`${refrescoProduct.name} no está configurado para ${alcoholProduct.name}`);
+        }
         productName = `${product.name} - ${alcoholProduct.name} + ${refrescoProduct.name}`;
       }
     }
@@ -179,7 +199,7 @@ async function getOrderItems(orderId) {
 async function getOrderWithItems(orderId) {
   const result = await query(
     `
-      select id, order_code, table_name, table_number, source, status, total_cents, created_at, updated_at
+      select id, order_code, table_name, table_number, source, status, kitchen_status, bar_status, total_cents, created_at, updated_at
       from tpv_orders
       where id = $1
     `,
@@ -208,6 +228,8 @@ export async function createOrder(payload) {
 
   if (!isBarSale && (!Number.isInteger(tableNumber) || tableNumber <= 0)) throw new Error("La mesa no es válida");
   if (items.length === 0) throw new Error("El pedido no tiene productos");
+  const table = isBarSale ? null : await getTableByNumber(tableNumber);
+  const tableName = isBarSale ? "Barra" : table?.name ?? `Mesa ${tableNumber}`;
 
   const orderResult = await query(
     `
@@ -222,7 +244,7 @@ export async function createOrder(payload) {
       )
       returning id
     `,
-    [isBarSale ? "Barra" : `Mesa ${tableNumber}`, tableNumber, source, isBarSale ? "paid" : "pending"],
+    [tableName, tableNumber, source, isBarSale ? "paid" : "pending"],
   );
 
   const orderId = orderResult.rows[0].id;
@@ -277,6 +299,8 @@ export async function settleDeliveredItems(payload) {
 
   if (!Number.isInteger(tableNumber) || tableNumber <= 0) throw new Error("La mesa no es válida");
   if (items.length === 0) throw new Error("No hay líneas para cobrar");
+  const table = await getTableByNumber(tableNumber);
+  const tableName = table?.name ?? `Mesa ${tableNumber}`;
 
   const db = getDb();
   const client = await db.connect();
@@ -334,7 +358,7 @@ export async function settleDeliveredItems(payload) {
         )
         returning id
       `,
-      [`Mesa ${tableNumber}`, tableNumber, paidSource],
+      [tableName, tableNumber, paidSource],
     );
     const paidOrderId = paidOrderResult.rows[0].id;
     const affectedOrderIds = new Set();
@@ -446,7 +470,7 @@ export async function listOrders({ status, source, tableNumber, includeItems = f
 
   const result = await query(
     `
-      select id, order_code, table_name, table_number, source, status, total_cents, created_at, updated_at
+      select id, order_code, table_name, table_number, source, status, kitchen_status, bar_status, total_cents, created_at, updated_at
       from tpv_orders
       where ($1::text is null or status = $1)
         and ($2::text is null or source = $2)
@@ -568,9 +592,129 @@ export async function updateOrderStatus(id, status) {
       set status = $2,
           updated_at = now()
       where id = $1
-      returning id, order_code, table_name, table_number, source, status, total_cents, created_at, updated_at
+      returning id, order_code, table_name, table_number, source, status, kitchen_status, bar_status, total_cents, created_at, updated_at
     `,
     [id, status],
+  );
+
+  return result.rows[0] ? normalizeOrder(result.rows[0]) : null;
+}
+
+export async function updateOrderItems(id, items = []) {
+  await ensureOrdersTables();
+
+  if (!Array.isArray(items) || items.length === 0) throw new Error("No hay líneas para editar");
+
+  const db = getDb();
+  const client = await db.connect();
+
+  try {
+    await client.query("begin");
+
+    const orderResult = await client.query(
+      `
+        select id, status
+        from tpv_orders
+        where id = $1
+        for update
+      `,
+      [id],
+    );
+    const order = orderResult.rows[0];
+    if (!order) {
+      await client.query("rollback");
+      return null;
+    }
+    if (order.status === "paid" || order.status === "cancelled") {
+      throw new Error("Este pedido ya no se puede editar");
+    }
+
+    for (const item of items) {
+      const itemId = String(item.id ?? "").trim();
+      const quantity = Number.parseInt(item.quantity ?? item.qty ?? 0, 10);
+
+      if (!itemId) throw new Error("La línea del pedido no es válida");
+      if (!Number.isInteger(quantity) || quantity < 0) throw new Error("La cantidad no es válida");
+
+      if (quantity === 0) {
+        await client.query(
+          "delete from tpv_order_items where id = $1 and order_id = $2",
+          [itemId, id],
+        );
+      } else {
+        const updateResult = await client.query(
+          `
+            update tpv_order_items
+            set quantity = $3
+            where id = $1
+              and order_id = $2
+          `,
+          [itemId, id, quantity],
+        );
+
+        if (updateResult.rowCount === 0) throw new Error("La línea del pedido no existe");
+      }
+    }
+
+    const totalsResult = await client.query(
+      `
+        select
+          coalesce(sum(quantity * unit_price_cents), 0) as total_cents,
+          count(*)::integer as item_count
+        from tpv_order_items
+        where order_id = $1
+      `,
+      [id],
+    );
+    const { total_cents: totalCents, item_count: itemCount } = totalsResult.rows[0];
+
+    await client.query(
+      `
+        update tpv_orders
+        set total_cents = $2,
+            status = case when $3::integer = 0 then 'cancelled' else status end,
+            updated_at = now()
+        where id = $1
+      `,
+      [id, Number(totalCents), Number(itemCount)],
+    );
+
+    await client.query("commit");
+    return getOrderWithItems(id);
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateOrderAreaStatus(id, area, status) {
+  await ensureOrdersTables();
+
+  const normalizedArea = area === "bar" ? "bar" : area === "kitchen" ? "kitchen" : "";
+  const normalizedStatus = status === "completed" ? "completed" : status === "pending" ? "pending" : "";
+
+  if (!normalizedArea) throw new Error("El histórico no es válido");
+  if (!normalizedStatus) throw new Error("El estado del histórico no es válido");
+
+  const columnName = normalizedArea === "bar" ? "bar_status" : "kitchen_status";
+  const result = await query(
+    `
+      update tpv_orders
+      set ${columnName} = $2,
+          status = case
+            when $3::text = 'bar'
+              and $2::text = 'completed'
+              and status in ('pending', 'preparing', 'open')
+            then 'delivered'
+            else status
+          end,
+          updated_at = now()
+      where id = $1
+      returning id, order_code, table_name, table_number, source, status, kitchen_status, bar_status, total_cents, created_at, updated_at
+    `,
+    [id, normalizedStatus, normalizedArea],
   );
 
   return result.rows[0] ? normalizeOrder(result.rows[0]) : null;

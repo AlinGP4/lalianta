@@ -1,4 +1,4 @@
-import AdminDashboard from "../../../TPV/AdminDashboard";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "TPV Administración - La Lianta",
@@ -9,5 +9,5 @@ export const metadata = {
 };
 
 export default function TpvAdminPage() {
-  return <AdminDashboard />;
+  redirect("/tpv/admin/productos");
 }

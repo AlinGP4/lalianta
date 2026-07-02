@@ -1,12 +1,19 @@
 "use client";
 
-import { CheckCheck, Minus, Plus, Search, X } from "lucide-react";
+import { Ban, CheckCircle2, Minus, Plus, ReceiptText, Search, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
+import ConfirmModal from "./ConfirmModal";
 import { formatPrice } from "./data";
+import LogoutButton from "./LogoutButton";
 import { applyPendingNotificationsToTables, subscribeToPendingOrderNotifications } from "./orderNotifications";
 
 const pendingStatuses = new Set(["pending", "preparing"]);
+const paymentMethodLabels = {
+  card: "tarjeta",
+  cash: "efectivo",
+};
 
 function isCubataProduct(product) {
   return product.category?.toLocaleLowerCase("es-ES") === "cubata" || product.name?.toLocaleLowerCase("es-ES") === "cubata";
@@ -35,12 +42,18 @@ function formatTicketDate(value) {
   }).format(new Date(value));
 }
 
-function TicketReceipt({ order, action }) {
+function TicketReceipt({ action, draftQuantities = {}, editable = false, onItemQuantityChange, order }) {
   const repeatedProducts = new Set(
     (order.items ?? [])
       .map((item) => item.productName)
       .filter((name, index, names) => names.indexOf(name) !== index),
   );
+  const receiptTotal = editable
+    ? (order.items ?? []).reduce((sum, item) => {
+      const quantity = draftQuantities[item.id] ?? item.quantity;
+      return sum + quantity * item.unitPrice;
+    }, 0)
+    : order.total;
 
   return (
     <article className={order.status === "delivered" || order.status === "paid" ? "tpv-receipt is-delivered" : "tpv-receipt"}>
@@ -57,23 +70,48 @@ function TicketReceipt({ order, action }) {
         <span>Sum.</span>
       </div>
       <div className="tpv-receipt-lines">
-        {(order.items ?? []).map((item) => (
-          <div className="tpv-receipt-grid" key={item.id ?? `${item.productName}-${item.source}-${item.unitPriceCents}`}>
-            <span>{item.quantity} x</span>
+        {(order.items ?? []).map((item) => {
+          const quantity = editable ? draftQuantities[item.id] ?? item.quantity : item.quantity;
+
+          return (
+          <div className={editable ? "tpv-receipt-grid tpv-receipt-grid-edit" : "tpv-receipt-grid"} key={item.id ?? `${item.productName}-${item.source}-${item.unitPriceCents}`}>
+            <span>{quantity} x</span>
             <span>
               {item.productName}
               {repeatedProducts.has(item.productName) && (
                 <em>{item.source === "customer" ? "Cliente" : "Camarero"}</em>
               )}
             </span>
-            <strong>{formatPrice(item.quantity * item.unitPrice)}</strong>
+            <div className="tpv-receipt-line-total">
+              <strong>{formatPrice(quantity * item.unitPrice)}</strong>
+              {editable && (
+                <div className="tpv-receipt-edit-controls" aria-label={`Editar ${item.productName}`}>
+                  <button
+                    type="button"
+                    onClick={() => onItemQuantityChange?.(item, quantity - 1)}
+                    aria-label={quantity === 1 ? `Eliminar ${item.productName}` : `Quitar ${item.productName}`}
+                  >
+                    <Minus aria-hidden="true" size={13} strokeWidth={2.4} />
+                  </button>
+                  <span>{quantity}</span>
+                  <button
+                    type="button"
+                    onClick={() => onItemQuantityChange?.(item, quantity + 1)}
+                    aria-label={`Añadir ${item.productName}`}
+                  >
+                    <Plus aria-hidden="true" size={13} strokeWidth={2.4} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="tpv-receipt-rule" />
       <div className="tpv-receipt-total">
         <span>Total</span>
-        <strong>{formatPrice(order.total)}</strong>
+        <strong>{formatPrice(receiptTotal)}</strong>
       </div>
       {action}
     </article>
@@ -131,6 +169,85 @@ function buildSeparateTicket(order, selectedItems) {
     items,
     total: items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
   };
+}
+
+function WaiterMainTabs({ activeTab, onChange }) {
+  return (
+    <div className="tpv-segmented tpv-waiter-main-tabs" role="tablist" aria-label="TPV Camarero">
+      <button
+        className={activeTab === "tables" ? "is-active" : ""}
+        type="button"
+        onClick={() => onChange("tables")}
+      >
+        Mesas
+      </button>
+      <button
+        className={activeTab === "products" ? "is-active" : ""}
+        type="button"
+        onClick={() => onChange("products")}
+      >
+        Productos
+      </button>
+    </div>
+  );
+}
+
+function StockManagementSection({
+  categories,
+  category,
+  filteredProducts,
+  onCategoryChange,
+  onToggleSoldOut,
+  productsLoading,
+  updatingStockProductId,
+}) {
+  return (
+    <section className="tpv-waiter-stock-panel" aria-label="Gestión rápida de productos">
+      <section className="tpv-scroll-tabs" aria-label="Categorías">
+        {categories.map((item) => (
+          <button
+            className={item === category ? "is-active" : ""}
+            type="button"
+            key={item}
+            onClick={() => onCategoryChange(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </section>
+
+      <section className="tpv-product-grid" aria-label="Productos">
+        {productsLoading && <div className="tpv-mobile-empty">Cargando productos...</div>}
+        {!productsLoading && filteredProducts.length === 0 && (
+          <div className="tpv-mobile-empty">No hay productos disponibles.</div>
+        )}
+        {filteredProducts.map((product) => (
+          <article className={product.soldOut ? "tpv-stock-card is-sold-out" : "tpv-stock-card"} key={product.id}>
+            <div>
+              <span>{product.category}</span>
+              <strong>{product.name}</strong>
+              <em>{formatPrice(product.price)}</em>
+            </div>
+            <button
+              className={product.soldOut ? "tpv-waiter-stock-button is-available" : "tpv-waiter-stock-button"}
+              type="button"
+              onClick={() => onToggleSoldOut(product)}
+              disabled={updatingStockProductId === product.id}
+              aria-label={`${product.soldOut ? "Marcar disponible" : "Marcar agotado"} ${product.name}`}
+              title={product.soldOut ? "Marcar disponible" : "Marcar agotado"}
+            >
+              {product.soldOut ? (
+                <CheckCircle2 aria-hidden="true" size={15} strokeWidth={2.2} />
+              ) : (
+                <Ban aria-hidden="true" size={15} strokeWidth={2.2} />
+              )}
+              {updatingStockProductId === product.id ? "..." : product.soldOut ? "Disponible" : "Agotar"}
+            </button>
+          </article>
+        ))}
+      </section>
+    </section>
+  );
 }
 
 function SplitSelectableReceipt({ order, selectedItems, mode, onLineClick, emptyLabel }) {
@@ -210,21 +327,57 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Todo");
   const [waiterTicket, setWaiterTicket] = useState([]);
+  const [waiterCartOpen, setWaiterCartOpen] = useState(false);
+  const [waiterTicketOpen, setWaiterTicketOpen] = useState(false);
   const [sendingWaiterTicket, setSendingWaiterTicket] = useState(false);
   const [loading, setLoading] = useState(!initialTableNumber);
   const [error, setError] = useState("");
   const [tableOrders, setTableOrders] = useState([]);
+  const [paymentRequests, setPaymentRequests] = useState([]);
   const [productList, setProductList] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [waiterMainTab, setWaiterMainTab] = useState("tables");
   const [ticketTab, setTicketTab] = useState("pending");
   const [paymentMode, setPaymentMode] = useState("full");
   const [splitCount, setSplitCount] = useState(2);
   const [separateSelection, setSeparateSelection] = useState({});
   const [separateModalOpen, setSeparateModalOpen] = useState(false);
+  const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [tableNameDraft, setTableNameDraft] = useState("");
+  const [creatingTable, setCreatingTable] = useState(false);
   const [settlingPayment, setSettlingPayment] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState("");
+  const [orderItemDraft, setOrderItemDraft] = useState({});
+  const [savingOrderEdit, setSavingOrderEdit] = useState(false);
+  const [updatingStockProductId, setUpdatingStockProductId] = useState("");
   const [resettingOrders, setResettingOrders] = useState(false);
   const [cubataDraft, setCubataDraft] = useState(null);
+  const [cubataConfigs, setCubataConfigs] = useState([]);
+  const [confirmModal, setConfirmModal] = useState(null);
+
+  async function loadProductCatalog({ showLoading = false } = {}) {
+    if (showLoading) setProductsLoading(true);
+    setError("");
+
+    try {
+      const [productsResponse, cubatasResponse] = await Promise.all([
+        fetch("/api/products?includeInactive=false", { cache: "no-store" }),
+        fetch("/api/cubatas", { cache: "no-store" }),
+      ]);
+      const productsData = await productsResponse.json();
+      const cubatasData = await cubatasResponse.json();
+      if (!productsResponse.ok) throw new Error(productsData.error || "No se pudieron cargar los productos");
+      if (!cubatasResponse.ok) throw new Error(cubatasData.error || "No se pudo cargar el modo cubata");
+      setProductList(productsData.products);
+      setCubataConfigs(cubatasData.configs);
+      setWaiterTicket((current) => pruneCartByVisibleProducts(current, productsData.products));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      if (showLoading) setProductsLoading(false);
+    }
+  }
 
   const filteredTables = useMemo(() => {
     const normalizedQuery = query.trim();
@@ -240,7 +393,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const pendingOrdersLabel = pendingOrdersTotal === 1 ? "1 pedido sin hacer" : `${pendingOrdersTotal} pedidos sin hacer`;
 
   const categories = useMemo(() => (
-    ["Todo", ...Array.from(new Set(productList.map((product) => product.category))).sort()]
+    ["Todo", ...Array.from(new Set(productList.map((product) => product.category)))]
   ), [productList]);
 
   const filteredProducts = useMemo(() => {
@@ -255,72 +408,85 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "refresco"),
     [productList],
   );
+  const cubataRefrescoProducts = useMemo(() => {
+    if (!cubataDraft?.alcoholProductId) return refrescoProducts;
+
+    const config = cubataConfigs.find((item) => item.alcoholProductId === cubataDraft.alcoholProductId);
+    if (!config || config.mixerProductIds.length === 0) return refrescoProducts;
+
+    return config.mixerProductIds
+      .map((id) => refrescoProducts.find((product) => product.id === id))
+      .filter(Boolean);
+  }, [cubataConfigs, cubataDraft?.alcoholProductId, refrescoProducts]);
   const selectedCubataAlcohol = useMemo(
     () => alcoholProducts.find((product) => product.id === cubataDraft?.alcoholProductId),
     [alcoholProducts, cubataDraft?.alcoholProductId],
   );
   const selectedCubataRefresco = useMemo(
-    () => refrescoProducts.find((product) => product.id === cubataDraft?.refrescoProductId),
-    [refrescoProducts, cubataDraft?.refrescoProductId],
+    () => cubataRefrescoProducts.find((product) => product.id === cubataDraft?.refrescoProductId),
+    [cubataRefrescoProducts, cubataDraft?.refrescoProductId],
   );
   const cubataStep = cubataDraft?.step ?? "alcohol";
 
   const waiterTotal = waiterTicket.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const waiterLineCount = waiterTicket.reduce((sum, item) => sum + item.qty, 0);
   const deliveredTicket = useMemo(() => mergeOrdersByStatus(tableOrders, "delivered"), [tableOrders]);
   const paidTicket = useMemo(() => mergeOrdersByStatus(tableOrders, "paid"), [tableOrders]);
+  const tablePaymentRequest = useMemo(
+    () => paymentRequests.find((request) => Number(request.tableNumber) === Number(selectedTable)) ?? null,
+    [paymentRequests, selectedTable],
+  );
+  const selectedTableInfo = useMemo(
+    () => tables.find((table) => Number(table.number) === Number(selectedTable)) ?? null,
+    [selectedTable, tables],
+  );
+  const selectedTableLabel = selectedTableInfo?.name ?? `Mesa ${selectedTable}`;
   const splitTotal = splitCount > 0 ? deliveredTicket.total / splitCount : deliveredTicket.total;
   const separateTicket = useMemo(
     () => buildSeparateTicket(deliveredTicket, separateSelection),
     [deliveredTicket, separateSelection],
   );
 
-  useEffect(() => {
-    async function loadProducts() {
-      setProductsLoading(true);
-      setError("");
+  async function loadTables({ showLoading = false } = {}) {
+    if (showLoading) setLoading(true);
+    setError("");
 
-      try {
-        const response = await fetch("/api/products?includeInactive=false", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar los productos");
-        setProductList(data.products);
-      } catch (requestError) {
-        setError(requestError.message);
-      } finally {
-        setProductsLoading(false);
-      }
+    try {
+      const response = await fetch("/api/tables?includeInactive=false", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudieron cargar las mesas");
+      setTables(data.tables);
+      return data.tables;
+    } catch (requestError) {
+      setError(requestError.message);
+      return [];
+    } finally {
+      if (showLoading) setLoading(false);
     }
+  }
 
-    loadProducts();
+  useEffect(() => {
+    loadProductCatalog({ showLoading: true });
   }, []);
+
+  useEffect(() => (
+    subscribeToCatalogChanges(() => {
+      loadProductCatalog();
+    })
+  ), []);
 
   useEffect(() => {
     if (selectedTable) return;
-
-    async function loadTables() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const response = await fetch("/api/tables?includeInactive=false", { cache: "no-store" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar las mesas");
-        setTables(data.tables);
-      } catch (requestError) {
-        setError(requestError.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadTables();
+    loadTables({ showLoading: true });
   }, [selectedTable]);
 
   useEffect(() => {
     if (selectedTable) return undefined;
 
     return subscribeToPendingOrderNotifications((notifications) => {
-      setTables((current) => applyPendingNotificationsToTables(current, notifications));
+      loadTables().then((freshTables) => {
+        setTables((current) => applyPendingNotificationsToTables(freshTables.length > 0 ? freshTables : current, notifications));
+      });
     });
   }, [selectedTable]);
 
@@ -332,6 +498,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     eventSource.addEventListener("orders", (event) => {
       const data = JSON.parse(event.data);
       setTableOrders(data.orders);
+      setPaymentRequests(data.paymentRequests ?? []);
       setOrdersLoading(false);
     });
 
@@ -342,27 +509,29 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     return () => eventSource.close();
   }, [selectedTable, ticketTab]);
 
-  useEffect(() => {
+  async function loadTableOrders() {
     if (!selectedTable) return;
 
-    async function loadTableOrders() {
-      setOrdersLoading(true);
-      setError("");
+    setOrdersLoading(true);
+    setError("");
 
-      try {
-        const response = await fetch(
-          `/api/orders?tableNumber=${selectedTable}&includeItems=true`,
-          { cache: "no-store" },
-        );
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar los pedidos de la mesa");
-        setTableOrders(data.orders);
-      } catch (requestError) {
-        setError(requestError.message);
-      } finally {
-        setOrdersLoading(false);
-      }
+    try {
+      const response = await fetch(
+        `/api/orders?tableNumber=${selectedTable}&includeItems=true`,
+        { cache: "no-store" },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudieron cargar los pedidos de la mesa");
+      setTableOrders(data.orders);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setOrdersLoading(false);
     }
+  }
+
+  useEffect(() => {
+    if (!selectedTable) return;
 
     loadTableOrders();
   }, [selectedTable]);
@@ -371,22 +540,64 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     setSeparateSelection({});
   }, [selectedTable, deliveredTicket.total]);
 
-  async function markDelivered(order) {
+  useEffect(() => {
+    cancelEditOrder();
+  }, [selectedTable, ticketTab]);
+
+  function startEditOrder(order) {
+    setEditingOrderId(order.id);
+    setOrderItemDraft(Object.fromEntries((order.items ?? []).map((item) => [item.id, item.quantity])));
+    setError("");
+  }
+
+  function cancelEditOrder() {
+    setEditingOrderId("");
+    setOrderItemDraft({});
+  }
+
+  function changeOrderItemDraft(item, quantity) {
+    if (!item?.id) return;
+
+    setOrderItemDraft((current) => ({
+      ...current,
+      [item.id]: Math.max(0, Number(quantity)),
+    }));
+  }
+
+  async function confirmEditOrder(order) {
+    if (!order?.id || savingOrderEdit) return;
+
+    setSavingOrderEdit(true);
     setError("");
 
     try {
       const response = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "delivered" }),
+        body: JSON.stringify({
+          items: (order.items ?? []).map((item) => ({
+            id: item.id,
+            quantity: orderItemDraft[item.id] ?? item.quantity,
+          })),
+        }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "No se pudo marcar como entregado");
-      setTableOrders((current) => current.map((item) => (
-        item.id === order.id ? { ...item, ...data.order, items: item.items ?? [] } : item
-      )));
+      if (!response.ok) throw new Error(data.error || "No se pudo editar el pedido");
+
+      setTableOrders((current) => {
+        if (data.order.status === "cancelled") {
+          return current.filter((currentOrder) => currentOrder.id !== data.order.id);
+        }
+
+        return current.map((currentOrder) => (
+          currentOrder.id === data.order.id ? data.order : currentOrder
+        ));
+      });
+      cancelEditOrder();
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setSavingOrderEdit(false);
     }
   }
 
@@ -434,6 +645,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   }
 
   function addWaiterItem(product) {
+    if (product.soldOut) return;
+
     setTicketTab("pending");
     setWaiterTicket((current) => {
       const existing = current.find((item) => item.id === product.id);
@@ -445,7 +658,37 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     });
   }
 
+  async function toggleWaiterProductSoldOut(product) {
+    if (updatingStockProductId) return;
+
+    setUpdatingStockProductId(product.id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/products/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ soldOut: !product.soldOut }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo actualizar el producto");
+
+      setProductList((current) => current.map((item) => (
+        item.id === data.product.id ? data.product : item
+      )));
+      if (!data.product.active || data.product.soldOut) {
+        setWaiterTicket((current) => current.filter((item) => (item.productId ?? item.id) !== data.product.id));
+      }
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setUpdatingStockProductId("");
+    }
+  }
+
   function addWaiterProduct(product) {
+    if (product.soldOut) return;
+
     if (isCubataProduct(product) && !product.alcoholProductId && !product.refrescoProductId) {
       setCubataDraft({
         alcoholProductId: "",
@@ -483,7 +726,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   function confirmCubata() {
     if (!cubataDraft?.alcoholProductId || !cubataDraft?.refrescoProductId) return;
     const alcoholProduct = alcoholProducts.find((product) => product.id === cubataDraft.alcoholProductId);
-    const refrescoProduct = refrescoProducts.find((product) => product.id === cubataDraft.refrescoProductId);
+    const refrescoProduct = cubataRefrescoProducts.find((product) => product.id === cubataDraft.refrescoProductId);
     if (!alcoholProduct || !refrescoProduct) return;
 
     addWaiterItem(buildCubataItem(cubataDraft.product, alcoholProduct, refrescoProduct));
@@ -527,6 +770,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
         return [data.order, ...withoutUpdatedOrder];
       });
       setWaiterTicket([]);
+      setWaiterCartOpen(false);
       setTicketTab("pending");
     } catch (requestError) {
       setError(requestError.message);
@@ -603,9 +847,6 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   }
 
   async function resetTableOrders() {
-    const confirmed = window.confirm(`Reiniciar todos los pedidos de la Mesa ${selectedTable}?`);
-    if (!confirmed) return;
-
     setResettingOrders(true);
     setError("");
 
@@ -627,64 +868,197 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     }
   }
 
+  async function createWaiterTable() {
+    const tableName = tableNameDraft.trim();
+    if (!tableName) {
+      setError("Pon un nombre para la mesa.");
+      return;
+    }
+
+    setCreatingTable(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableName }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo crear la mesa");
+
+      const tableNumber = String(data.table.number);
+      setTables((current) => [...current, data.table].sort((first, second) => Number(first.number) - Number(second.number)));
+      setSelectedTable(tableNumber);
+      setTableModalOpen(false);
+      setTableNameDraft("");
+      window.history.replaceState(null, "", `/tpv/pedidos?mesa=${tableNumber}`);
+    } catch (requestError) {
+      setError(requestError.message);
+      await loadTables();
+    } finally {
+      setCreatingTable(false);
+    }
+  }
+
+  async function openWaiterTable(table) {
+    const tableNumber = String(table.number);
+    setSelectedTable(tableNumber);
+    window.history.replaceState(null, "", `/tpv/pedidos?mesa=${tableNumber}`);
+
+    if (!table.hasWaiterCall) return;
+
+    try {
+      await fetch(`/api/waiter-calls?tableNumber=${tableNumber}`, { method: "DELETE" });
+      setTables((current) => current.map((item) => (
+        Number(item.number) === Number(tableNumber)
+          ? { ...item, hasWaiterCall: false, waiterCall: null }
+          : item
+      )));
+    } catch {
+      // The next notification refresh will restore the marker if it could not be cleared.
+    }
+  }
+
   if (!selectedTable) {
     return (
       <main className="tpv-phone tpv-phone-tables">
         <header className="tpv-phone-head">
-          <Link className="tpv-phone-back" href="/tpv" aria-label="Volver">{"<"}</Link>
+          <Link className="tpv-phone-home" href="/tpv">Inicio</Link>
           <div>
-            <p className="tpv-kicker">TPV Pedidos</p>
-            <h1>Mesas</h1>
+            <p className="tpv-kicker">TPV Camarero</p>
+            <h1>{waiterMainTab === "tables" ? "Mesas" : "Productos"}</h1>
           </div>
-          <Link className="tpv-phone-admin" href="/tpv/admin">Admin</Link>
+          <div className="tpv-phone-actions">
+            <Link className="tpv-phone-admin" href="/tpv/admin/productos">Admin</Link>
+            <LogoutButton className="tpv-phone-logout" />
+          </div>
         </header>
-
-        <section className="tpv-table-search" aria-label="Buscar mesa">
-          <Search aria-hidden="true" size={18} strokeWidth={2.2} />
-          <input
-            inputMode="numeric"
-            placeholder="Buscar número de mesa"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </section>
 
         {error && <div className="tpv-error">{error}</div>}
 
-        {!loading && pendingOrdersTotal > 0 && (
-          <div className="tpv-mobile-table-warning" role="status">
-            <span aria-hidden="true" />
-            <strong>Aviso</strong>
-            <em>{pendingOrdersLabel}</em>
-          </div>
-        )}
+        <WaiterMainTabs activeTab={waiterMainTab} onChange={setWaiterMainTab} />
 
-        <section className="tpv-mobile-table-grid" aria-label="Mesas activas">
-          {loading && <div className="tpv-mobile-empty">Cargando mesas...</div>}
-          {!loading && filteredTables.length === 0 && (
-            <div className="tpv-mobile-empty">No hay mesas activas con ese número.</div>
-          )}
-          {!loading && filteredTables.map((table) => (
+        {waiterMainTab === "tables" && (
+          <>
+            <div className="tpv-table-toolbar">
+              <button className="tpv-button" type="button" onClick={() => setTableModalOpen(true)} disabled={creatingTable}>
+                Nueva mesa
+              </button>
+            </div>
+
+            <section className="tpv-table-search" aria-label="Buscar mesa">
+              <Search aria-hidden="true" size={18} strokeWidth={2.2} />
+              <input
+                inputMode="numeric"
+                placeholder="Buscar número de mesa"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </section>
+
+            {!loading && pendingOrdersTotal > 0 && (
+              <div className="tpv-mobile-table-warning" role="status">
+                <span aria-hidden="true" />
+                <strong>Aviso</strong>
+                <em>{pendingOrdersLabel}</em>
+              </div>
+            )}
+
+            <section className="tpv-mobile-table-grid" aria-label="Mesas activas">
+              {loading && <div className="tpv-mobile-empty">Cargando mesas...</div>}
+              {!loading && filteredTables.length === 0 && (
+                <div className="tpv-mobile-empty">No hay mesas activas con ese número.</div>
+              )}
+              {!loading && filteredTables.map((table) => (
             <button
-              className={table.pendingOrders > 0 ? "tpv-mobile-table has-pending" : "tpv-mobile-table"}
+              className={table.pendingOrders > 0 || table.hasWaiterCall ? "tpv-mobile-table has-pending" : "tpv-mobile-table"}
               type="button"
               key={table.id}
-              onClick={() => {
-                setSelectedTable(String(table.number));
-                window.history.replaceState(null, "", `/tpv/pedidos?mesa=${table.number}`);
-              }}
+              onClick={() => openWaiterTable(table)}
             >
               <span>Mesa</span>
-              <strong>{table.number}</strong>
+              <strong>{table.name}</strong>
               {table.pendingOrders > 0 && (
                 <em>
                   <i aria-hidden="true" />
                   {table.pendingOrders === 1 ? "1 sin hacer" : `${table.pendingOrders} sin hacer`}
                 </em>
               )}
+              {table.paymentRequest && (
+                <em className="is-payment-request">
+                  Quiere pagar con {paymentMethodLabels[table.paymentRequest.paymentMethod] ?? "pago"}
+                </em>
+              )}
+              {table.hasWaiterCall && (
+                <em className="is-waiter-call">
+                  <i aria-hidden="true" />
+                  Llama camarero
+                </em>
+              )}
             </button>
-          ))}
-        </section>
+              ))}
+            </section>
+          </>
+        )}
+
+        {waiterMainTab === "products" && (
+          <StockManagementSection
+            category={category}
+            filteredProducts={filteredProducts}
+            onCategoryChange={setCategory}
+            onToggleSoldOut={toggleWaiterProductSoldOut}
+            productsLoading={productsLoading}
+            updatingStockProductId={updatingStockProductId}
+            categories={categories}
+          />
+        )}
+        {tableModalOpen && (
+          <div className="tpv-modal-backdrop tpv-modal-backdrop-center" role="presentation" onClick={() => !creatingTable && setTableModalOpen(false)}>
+            <section
+              className="tpv-modal-window tpv-confirm-modal customer-table-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Nueva mesa"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="tpv-modal-head">
+                <div>
+                  <p className="tpv-kicker">TPV Camarero</p>
+                  <h2>Nueva mesa</h2>
+                </div>
+                <button className="tpv-modal-close" type="button" onClick={() => setTableModalOpen(false)} aria-label="Cerrar" disabled={creatingTable}>
+                  <X aria-hidden="true" size={20} strokeWidth={2.2} />
+                </button>
+              </div>
+
+              <form
+                className="tpv-modal-body tpv-table-modal-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  createWaiterTable();
+                }}
+              >
+                <label>
+                  <span>Nombre</span>
+                  <input
+                    value={tableNameDraft}
+                    onChange={(event) => setTableNameDraft(event.target.value)}
+                    placeholder="Terraza Laura"
+                    autoFocus
+                    required
+                  />
+                </label>
+              </form>
+
+              <div className="tpv-modal-foot">
+                <button className="tpv-button" type="button" onClick={createWaiterTable} disabled={creatingTable || !tableNameDraft.trim()}>
+                  {creatingTable ? "Creando..." : "Crear mesa"}
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     );
   }
@@ -704,10 +1078,31 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           {"<"}
         </button>
         <div>
-          <p className="tpv-kicker">TPV Pedidos</p>
-          <h1>Mesa {selectedTable}</h1>
+          <p className="tpv-kicker">TPV Camarero</p>
+          <h1>{selectedTableLabel}</h1>
         </div>
-        <Link className="tpv-phone-admin" href="/tpv/admin">Admin</Link>
+        <div className="tpv-phone-actions">
+          <button
+            className="customer-waiter-trigger tpv-waiter-ticket-trigger"
+            type="button"
+            onClick={() => {
+              setWaiterTicketOpen(true);
+              loadTableOrders();
+            }}
+          >
+            <ReceiptText aria-hidden="true" size={19} strokeWidth={2.4} />
+            Ticket
+          </button>
+          <button
+            className="customer-cart-trigger tpv-waiter-cart-trigger"
+            type="button"
+            onClick={() => setWaiterCartOpen(true)}
+            aria-label={`Abrir carrito, ${waiterLineCount} productos`}
+          >
+            <ShoppingCart aria-hidden="true" size={22} strokeWidth={2.4} />
+            {waiterLineCount > 0 && <span>{waiterLineCount}</span>}
+          </button>
+        </div>
       </header>
 
       {error && <div className="tpv-error">{error}</div>}
@@ -734,223 +1129,298 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
             )}
             {filteredProducts.map((product) => (
               <button
-                className="tpv-tile"
+                className={product.soldOut ? "tpv-tile is-sold-out" : "tpv-tile"}
                 type="button"
                 key={product.id}
+                disabled={product.soldOut}
                 onClick={() => addWaiterProduct(product)}
               >
                 <span>{product.category}</span>
                 <strong>{product.name}</strong>
+                {product.soldOut && <small className="tpv-tile-stock">Agotado</small>}
                 <em>{formatPrice(product.price)}</em>
               </button>
             ))}
           </section>
         </section>
 
-        <aside className="tpv-ticket" aria-label="Ticket actual">
-          <div className="tpv-ticket-head">
-            <strong>Ticket mesa {selectedTable}</strong>
-            <span>{tableOrders.filter((order) => pendingStatuses.has(order.status)).length} pendientes</span>
-          </div>
-          <button
-            className="tpv-ticket-reset"
-            type="button"
-            onClick={resetTableOrders}
-            disabled={resettingOrders || (tableOrders.length === 0 && waiterTicket.length === 0)}
+      </div>
+
+      {waiterTicketOpen && (
+        <div
+          className="tpv-modal-backdrop tpv-modal-backdrop-center"
+          role="presentation"
+          onClick={() => {
+            setWaiterTicketOpen(false);
+            cancelEditOrder();
+          }}
+        >
+          <aside
+            className="tpv-ticket tpv-waiter-ticket-modal"
+            aria-label="Ticket actual"
+            onClick={(event) => event.stopPropagation()}
           >
-            {resettingOrders ? "Reiniciando..." : "Reiniciar pedidos"}
-          </button>
-
-          <div className="tpv-segmented" role="tablist" aria-label="Estado de pedidos">
-            <button
-              className={ticketTab === "pending" ? "is-active" : ""}
-              type="button"
-              onClick={() => setTicketTab("pending")}
-            >
-              Pendientes
-            </button>
-            <button
-              className={ticketTab === "delivered" ? "is-active" : ""}
-              type="button"
-              onClick={() => setTicketTab("delivered")}
-            >
-              Entregados
-            </button>
-            <button
-              className={ticketTab === "paid" ? "is-active" : ""}
-              type="button"
-              onClick={() => setTicketTab("paid")}
-            >
-              Pagados
-            </button>
-          </div>
-
-          <div className="tpv-ticket-block">
-            {ticketTab === "pending" && (
-              <>
-                {waiterTicket.length > 0 && (
-                  <div className="tpv-ticket-selection">
-                    <p>Selección actual</p>
-                    <div className="tpv-ticket-lines">
-                      {waiterTicket.map((item) => (
-                        <div className="tpv-ticket-line tpv-ticket-line-qty" key={item.id}>
-                          <span>{item.name}</span>
-                          <strong>{formatPrice(item.qty * item.price)}</strong>
-                          <div className="tpv-qty">
-                            <button type="button" onClick={() => removeWaiterProduct(item.id)} aria-label={`Quitar ${item.name}`}>
-                              <Minus aria-hidden="true" size={15} strokeWidth={2.3} />
-                            </button>
-                            <span>{item.qty}</span>
-                            <button type="button" onClick={() => addWaiterProduct(item)} aria-label={`Añadir ${item.name}`}>
-                              <Plus aria-hidden="true" size={15} strokeWidth={2.3} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="tpv-ticket-total">
-                      <span>Total selección</span>
-                      <strong>{formatPrice(waiterTotal)}</strong>
-                    </div>
-                    <button
-                      className="tpv-button"
-                      type="button"
-                      onClick={sendWaiterTicket}
-                      disabled={sendingWaiterTicket}
-                    >
-                      {sendingWaiterTicket ? "Añadiendo" : "Añadir a pendientes"}
-                    </button>
-                  </div>
-                )}
-
-                <p>Pedidos pendientes</p>
-                {ordersLoading && <span className="tpv-ticket-muted">Cargando pedidos...</span>}
-                {!ordersLoading && tableOrders.filter((order) => pendingStatuses.has(order.status)).length === 0 && (
-                  <span className="tpv-ticket-muted">Sin pedidos pendientes.</span>
-                )}
-                {!ordersLoading && tableOrders.filter((order) => pendingStatuses.has(order.status)).map((order) => (
-                  <TicketReceipt
-                    key={order.id}
-                    order={order}
-                    action={(
-                      <button className="tpv-table-order-done" type="button" onClick={() => markDelivered(order)}>
-                        <CheckCheck aria-hidden="true" size={17} strokeWidth={2.3} />
-                        Marcar entregado
-                      </button>
-                    )}
-                  />
-                ))}
-              </>
+            <div className="tpv-modal-head tpv-waiter-ticket-head">
+              <div>
+                <p className="tpv-kicker">{selectedTableLabel}</p>
+                <h2>Ticket</h2>
+              </div>
+              <button
+                className="tpv-modal-close"
+                type="button"
+                onClick={() => {
+                  setWaiterTicketOpen(false);
+                  cancelEditOrder();
+                }}
+                aria-label="Cerrar ticket"
+              >
+                <X aria-hidden="true" size={20} strokeWidth={2.2} />
+              </button>
+            </div>
+            <div className="tpv-ticket-head">
+              <strong>Ticket mesa {selectedTable}</strong>
+              <span>{tableOrders.filter((order) => pendingStatuses.has(order.status)).length} pendientes</span>
+            </div>
+            {tablePaymentRequest && (
+              <div className="tpv-payment-request-alert">
+                <div>
+                  <strong>Quieren pagar con {paymentMethodLabels[tablePaymentRequest.paymentMethod] ?? "pago"}</strong>
+                  <span>Caja confirma si pagan todo o parte.</span>
+                </div>
+                <em>{formatPrice(tablePaymentRequest.total)}</em>
+              </div>
             )}
+            <button
+              className="tpv-ticket-reset"
+              type="button"
+              onClick={() => setConfirmModal({
+                title: "Reiniciar pedidos",
+                message: `Se eliminarán todos los pedidos de la Mesa ${selectedTable}.`,
+                confirmLabel: "Reiniciar",
+                onConfirm: resetTableOrders,
+              })}
+              disabled={resettingOrders || (tableOrders.length === 0 && waiterTicket.length === 0)}
+            >
+              {resettingOrders ? "Reiniciando..." : "Reiniciar pedidos"}
+            </button>
 
-            {ticketTab === "delivered" && (
-              <>
-                <p>Pedidos entregados</p>
-                {ordersLoading && <span className="tpv-ticket-muted">Cargando pedidos...</span>}
-                {!ordersLoading && deliveredTicket.items.length === 0 && (
-                  <span className="tpv-ticket-muted">Todavía no hay entregados.</span>
-                )}
-                {!ordersLoading && deliveredTicket.items.length > 0 && (
-                  <>
-                    <TicketReceipt key="delivered-ticket" order={deliveredTicket} />
-                    <div className="tpv-payment-box">
-                      <div className="tpv-payment-actions" aria-label="Opciones de cobro">
-                        <button
-                          className={paymentMode === "full" ? "tpv-payment-button is-active" : "tpv-payment-button"}
-                          type="button"
-                          onClick={() => setPaymentMode("full")}
-                        >
-                          Pagar todo
-                        </button>
-                        <button
-                          className={paymentMode === "split" ? "tpv-payment-button is-active" : "tpv-payment-button"}
-                          type="button"
-                          onClick={() => setPaymentMode("split")}
-                        >
-                          Dividir
-                        </button>
-                        <button
-                          className={separateModalOpen ? "tpv-payment-button is-active" : "tpv-payment-button"}
-                          type="button"
-                          onClick={openSeparateModal}
-                        >
-                          Por separado
-                        </button>
-                      </div>
+            <div className="tpv-segmented" role="tablist" aria-label="Estado de pedidos">
+              <button
+                className={ticketTab === "pending" ? "is-active" : ""}
+                type="button"
+                onClick={() => setTicketTab("pending")}
+              >
+                Pendientes
+              </button>
+              <button
+                className={ticketTab === "delivered" ? "is-active" : ""}
+                type="button"
+                onClick={() => setTicketTab("delivered")}
+              >
+                Entregados
+              </button>
+              <button
+                className={ticketTab === "paid" ? "is-active" : ""}
+                type="button"
+                onClick={() => setTicketTab("paid")}
+              >
+                Pagados
+              </button>
+            </div>
 
-                      {paymentMode === "full" && (
-                        <div className="tpv-payment-stack">
-                          <div className="tpv-payment-summary">
-                            <span>Total a cobrar</span>
-                            <strong>{formatPrice(deliveredTicket.total)}</strong>
-                          </div>
-                          <button
-                            className="tpv-button"
-                            type="button"
-                            onClick={markDeliveredAsPaid}
-                            disabled={settlingPayment}
-                          >
-                            {settlingPayment ? "Pagando..." : "Pagar"}
-                          </button>
+            <div className="tpv-ticket-block">
+              {ticketTab === "pending" && (
+                <>
+                  <p>Pedidos pendientes</p>
+                  {ordersLoading && <span className="tpv-ticket-muted">Cargando pedidos...</span>}
+                  {!ordersLoading && tableOrders.filter((order) => pendingStatuses.has(order.status)).length === 0 && (
+                    <span className="tpv-ticket-muted">Sin pedidos pendientes.</span>
+                  )}
+                  {!ordersLoading && tableOrders.filter((order) => pendingStatuses.has(order.status)).map((order) => (
+                    <TicketReceipt
+                      key={order.id}
+                      draftQuantities={editingOrderId === order.id ? orderItemDraft : {}}
+                      editable={editingOrderId === order.id}
+                      order={order}
+                      onItemQuantityChange={changeOrderItemDraft}
+                      action={(
+                        <div className="tpv-ticket-edit-actions">
+                          {editingOrderId === order.id ? (
+                            <>
+                              <button
+                                className="tpv-button"
+                                type="button"
+                                onClick={() => confirmEditOrder(order)}
+                                disabled={savingOrderEdit}
+                              >
+                                {savingOrderEdit ? "Guardando..." : "Confirmar"}
+                              </button>
+                              <button
+                                className="tpv-button tpv-button-secondary"
+                                type="button"
+                                onClick={cancelEditOrder}
+                                disabled={savingOrderEdit}
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="tpv-button tpv-button-secondary"
+                              type="button"
+                              onClick={() => startEditOrder(order)}
+                              disabled={Boolean(editingOrderId)}
+                            >
+                              Editar
+                            </button>
+                          )}
                         </div>
                       )}
+                    />
+                  ))}
+                </>
+              )}
 
-                      {paymentMode === "split" && (
-                        <div className="tpv-payment-split">
-                          <div className="tpv-payment-stepper" aria-label="Dividir cuenta">
-                            <button
-                              type="button"
-                              onClick={() => setSplitCount((current) => Math.max(2, current - 1))}
-                            >
-                              -
-                            </button>
-                            <div>
-                              <span>Personas</span>
-                              <strong>{splitCount}</strong>
+              {ticketTab === "delivered" && (
+                <>
+                  <p>Pedidos entregados</p>
+                  {ordersLoading && <span className="tpv-ticket-muted">Cargando pedidos...</span>}
+                  {!ordersLoading && deliveredTicket.items.length === 0 && (
+                    <span className="tpv-ticket-muted">Todavía no hay entregados.</span>
+                  )}
+                  {!ordersLoading && deliveredTicket.items.length > 0 && (
+                    <>
+                      <TicketReceipt key="delivered-ticket" order={deliveredTicket} />
+                      <div className="tpv-payment-box">
+                        <div className="tpv-payment-actions" aria-label="Opciones de cobro">
+                          <button
+                            className={paymentMode === "full" ? "tpv-payment-button is-active" : "tpv-payment-button"}
+                            type="button"
+                            onClick={() => setPaymentMode("full")}
+                          >
+                            Pagar todo
+                          </button>
+                          <button
+                            className={paymentMode === "split" ? "tpv-payment-button is-active" : "tpv-payment-button"}
+                            type="button"
+                            onClick={() => setPaymentMode("split")}
+                          >
+                            Dividir
+                          </button>
+                          <button
+                            className={separateModalOpen ? "tpv-payment-button is-active" : "tpv-payment-button"}
+                            type="button"
+                            onClick={openSeparateModal}
+                          >
+                            Por separado
+                          </button>
+                        </div>
+
+                        {paymentMode === "full" && (
+                          <div className="tpv-payment-stack">
+                            <div className="tpv-payment-summary">
+                              <span>Total a cobrar</span>
+                              <strong>{formatPrice(deliveredTicket.total)}</strong>
                             </div>
                             <button
+                              className="tpv-button"
                               type="button"
-                              onClick={() => setSplitCount((current) => Math.min(12, current + 1))}
+                              onClick={markDeliveredAsPaid}
+                              disabled={settlingPayment}
                             >
-                              +
+                              {settlingPayment ? "Pagando..." : "Pagar"}
                             </button>
                           </div>
-                          <div className="tpv-payment-summary">
-                            <span>Importe por persona</span>
-                            <strong>{formatPrice(splitTotal)}</strong>
+                        )}
+
+                        {paymentMode === "split" && (
+                          <div className="tpv-payment-split">
+                            <div className="tpv-payment-stepper" aria-label="Dividir cuenta">
+                              <button
+                                type="button"
+                                onClick={() => setSplitCount((current) => Math.max(2, current - 1))}
+                              >
+                                -
+                              </button>
+                              <div>
+                                <span>Personas</span>
+                                <strong>{splitCount}</strong>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setSplitCount((current) => Math.min(12, current + 1))}
+                              >
+                                +
+                              </button>
+                            </div>
+                            <div className="tpv-payment-summary">
+                              <span>Importe por persona</span>
+                              <strong>{formatPrice(splitTotal)}</strong>
+                            </div>
+                            <button
+                              className="tpv-button"
+                              type="button"
+                              onClick={markDeliveredAsPaid}
+                              disabled={settlingPayment}
+                            >
+                              {settlingPayment ? "Pagando..." : "Pagar"}
+                            </button>
                           </div>
-                          <button
-                            className="tpv-button"
-                            type="button"
-                            onClick={markDeliveredAsPaid}
-                            disabled={settlingPayment}
-                          >
-                            {settlingPayment ? "Pagando..." : "Pagar"}
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
 
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+              {ticketTab === "paid" && (
+                <>
+                  <p>Tickets pagados</p>
+                  {ordersLoading && <span className="tpv-ticket-muted">Cargando tickets...</span>}
+                  {!ordersLoading && paidTicket.items.length === 0 && (
+                    <span className="tpv-ticket-muted">Todavía no hay tickets pagados.</span>
+                  )}
+                  {!ordersLoading && paidTicket.items.length > 0 && (
+                    <TicketReceipt key="paid-ticket" order={paidTicket} />
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
-            {ticketTab === "paid" && (
-              <>
-                <p>Tickets pagados</p>
-                {ordersLoading && <span className="tpv-ticket-muted">Cargando tickets...</span>}
-                {!ordersLoading && paidTicket.items.length === 0 && (
-                  <span className="tpv-ticket-muted">Todavía no hay tickets pagados.</span>
-                )}
-                {!ordersLoading && paidTicket.items.length > 0 && (
-                  <TicketReceipt key="paid-ticket" order={paidTicket} />
-                )}
-              </>
-            )}
-          </div>
-        </aside>
-      </div>
+      {waiterCartOpen && (
+        <div className="tpv-modal-backdrop tpv-modal-backdrop-center" role="presentation" onClick={() => setWaiterCartOpen(false)}>
+          <section
+            className="tpv-modal-window tpv-confirm-modal customer-cart-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Carrito camarero"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="tpv-modal-head">
+              <div>
+                <p className="tpv-kicker">{selectedTableLabel}</p>
+                <h2>Pedido camarero</h2>
+              </div>
+              <button className="tpv-modal-close" type="button" onClick={() => setWaiterCartOpen(false)} aria-label="Cerrar carrito">
+                <X aria-hidden="true" size={20} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            <WaiterCartContent
+              cart={waiterTicket}
+              lineCount={waiterLineCount}
+              onAdd={addWaiterProduct}
+              onRemove={removeWaiterProduct}
+              onSend={sendWaiterTicket}
+              sending={sendingWaiterTicket}
+              total={waiterTotal}
+            />
+          </section>
+        </div>
+      )}
 
       {cubataDraft && (
         <div className="tpv-modal-backdrop" role="presentation" onClick={() => setCubataDraft(null)}>
@@ -984,7 +1454,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
               {cubataStep === "refresco" && (
                 <MixerColumn
                   label="2. Refresco"
-                  products={refrescoProducts}
+                  products={cubataRefrescoProducts}
                   selectedId={cubataDraft.refrescoProductId}
                   onSelect={selectCubataRefresco}
                 />
@@ -1088,6 +1558,65 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
           </section>
         </div>
       )}
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onCancel={() => setConfirmModal(null)}
+          onConfirm={() => {
+            const action = confirmModal.onConfirm;
+            setConfirmModal(null);
+            action();
+          }}
+        />
+      )}
+      {tableModalOpen && (
+        <div className="tpv-modal-backdrop tpv-modal-backdrop-center" role="presentation" onClick={() => !creatingTable && setTableModalOpen(false)}>
+          <section
+            className="tpv-modal-window tpv-confirm-modal customer-table-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nueva mesa"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="tpv-modal-head">
+              <div>
+                <p className="tpv-kicker">TPV Camarero</p>
+                <h2>Nueva mesa</h2>
+              </div>
+              <button className="tpv-modal-close" type="button" onClick={() => setTableModalOpen(false)} aria-label="Cerrar" disabled={creatingTable}>
+                <X aria-hidden="true" size={20} strokeWidth={2.2} />
+              </button>
+            </div>
+
+            <form
+              className="tpv-modal-body tpv-table-modal-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createWaiterTable();
+              }}
+            >
+              <label>
+                <span>Nombre</span>
+                <input
+                  value={tableNameDraft}
+                  onChange={(event) => setTableNameDraft(event.target.value)}
+                  placeholder="Terraza Laura"
+                  autoFocus
+                  required
+                />
+              </label>
+            </form>
+
+            <div className="tpv-modal-foot">
+              <button className="tpv-button" type="button" onClick={createWaiterTable} disabled={creatingTable || !tableNameDraft.trim()}>
+                {creatingTable ? "Creando..." : "Crear mesa"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -1127,6 +1656,63 @@ function MixerChoiceSummary({ label, product }) {
   );
 }
 
+function WaiterCartContent({
+  cart,
+  lineCount,
+  onAdd,
+  onRemove,
+  onSend,
+  sending,
+  total,
+}) {
+  return (
+    <>
+      <div className="tpv-modal-body customer-cart">
+        <div className="customer-cart-head">
+          <strong>
+            <ShoppingCart aria-hidden="true" size={18} strokeWidth={2.4} />
+            Carrito
+          </strong>
+          <span>{lineCount} productos</span>
+        </div>
+
+        <div className="customer-cart-lines">
+          {cart.length === 0 && <p>Toca productos para añadirlos.</p>}
+          {cart.map((item) => (
+            <div className="customer-cart-line" key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <span>{formatPrice(item.price)}</span>
+              </div>
+              <div className="tpv-qty">
+                <button type="button" onClick={() => onRemove(item.id)} aria-label={`Quitar ${item.name}`}>
+                  <Minus aria-hidden="true" size={16} strokeWidth={2.4} />
+                </button>
+                <span>{item.qty}</span>
+                <button type="button" onClick={() => onAdd(item)} aria-label={`Añadir ${item.name}`}>
+                  <Plus aria-hidden="true" size={16} strokeWidth={2.4} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="customer-cart-total">
+          <span>Total</span>
+          <strong>{formatPrice(total)}</strong>
+        </div>
+      </div>
+
+      <div className="tpv-modal-foot">
+        <button className="tpv-button customer-confirm-button" type="button" onClick={onSend} disabled={cart.length === 0 || sending}>
+          <ShoppingCart aria-hidden="true" size={18} strokeWidth={2.4} />
+          {sending ? "Añadiendo pedido..." : "Añadir a pendientes"}
+        </button>
+      </div>
+    </>
+  );
+}
+
 function MixerColumn({ label, products, selectedId, onSelect }) {
   return (
     <div className="tpv-mixer-column">
@@ -1135,12 +1721,17 @@ function MixerColumn({ label, products, selectedId, onSelect }) {
         {products.length === 0 && <span className="tpv-ticket-muted">No hay productos de este tipo.</span>}
         {products.map((product) => (
           <button
-            className={selectedId === product.id ? "is-active" : ""}
+            className={[
+              selectedId === product.id ? "is-active" : "",
+              product.soldOut ? "is-sold-out" : "",
+            ].filter(Boolean).join(" ")}
             type="button"
             key={product.id}
+            disabled={product.soldOut}
             onClick={() => onSelect(product.id)}
           >
             <strong>{product.name}</strong>
+            {product.soldOut && <small>Agotado</small>}
           </button>
         ))}
       </div>

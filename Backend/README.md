@@ -25,7 +25,9 @@ El primer esquema base para TPV esta en `Backend/schema.sql`.
 Roles actuales:
 
 - `admin`: acceso a `/tpv/admin/*`.
-- `worker`: acceso a `/tpv` y `/tpv/pedidos`.
+- `barra`: acceso al histórico de barra.
+- `cocina`: acceso al histórico de cocina.
+- `camarero`: acceso a `/tpv/pedidos`.
 
 Paginas de acceso:
 

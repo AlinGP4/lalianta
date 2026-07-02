@@ -1,28 +1,80 @@
 "use client";
 
 import { Check, Pencil, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 const emptyForm = {
   name: "",
-  email: "",
   password: "",
-  role: "worker",
-  active: true,
+  role: "barra",
 };
+
+const roleLabels = {
+  admin: "Administrador",
+  barra: "Barra",
+  camarero: "Camarero",
+  cocina: "Cocina",
+};
+
+function getRoleLabel(value) {
+  return roleLabels[value] ?? "Barra";
+}
+
+function getFriendlyUserError(message) {
+  const text = String(message || "");
+
+  if (text.includes("regla de roles") || (text.includes("tpv_users_role_check") && text.includes("already exists"))) {
+    return "La regla de roles ya estaba creada. Recarga usuarios y vuelve a intentarlo.";
+  }
+
+  if (text.includes("tpv_users_role_check")) {
+    return "No se pudo guardar el rol. Usa solo admin, barra, cocina o camarero.";
+  }
+
+  if (text.includes("tpv_users_name_unique") || text.includes("Ya existe un usuario")) {
+    return "Ya existe un usuario con ese nombre. Cambia el usuario e inténtalo de nuevo.";
+  }
+
+  if (text.includes("tpv_users_email_key")) {
+    return "Ese usuario coincide con otro registro interno. Cambia ligeramente el nombre.";
+  }
+
+  if (text.includes("duplicate key") || text.includes("Ya existe un registro")) {
+    return "Ya existe un registro con esos datos. Revisa el usuario antes de guardar.";
+  }
+
+  if (text.includes("check constraint") || text.includes("reglas permitidas")) {
+    return "Algún dato no cumple las reglas permitidas. Revisa el rol y los campos obligatorios.";
+  }
+
+  if (text.includes("No autorizado")) {
+    return "Solo un administrador puede gestionar usuarios.";
+  }
+
+  return text || "No se pudo completar la acción de usuarios.";
+}
 
 export default function UsersAdminPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingUserId, setEditingUserId] = useState("");
   const [editForm, setEditForm] = useState(emptyForm);
+  const [confirmModal, setConfirmModal] = useState(null);
+  const toastTimeoutRef = useRef(null);
+
+  function showToast(message) {
+    setToast(getFriendlyUserError(message));
+    window.clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => setToast(""), 4200);
+  }
 
   async function loadUsers() {
     setLoading(true);
-    setError("");
+    setToast("");
 
     try {
       const response = await fetch("/api/users", { cache: "no-store" });
@@ -30,7 +82,7 @@ export default function UsersAdminPage() {
       if (!response.ok) throw new Error(data.error || "No se pudieron cargar los usuarios");
       setUsers(data.users);
     } catch (requestError) {
-      setError(requestError.message);
+      showToast(requestError.message);
     } finally {
       setLoading(false);
     }
@@ -38,6 +90,10 @@ export default function UsersAdminPage() {
 
   useEffect(() => {
     loadUsers();
+
+    return () => {
+      window.clearTimeout(toastTimeoutRef.current);
+    };
   }, []);
 
   function updateField(field, value) {
@@ -52,29 +108,27 @@ export default function UsersAdminPage() {
     setEditingUserId(user.id);
     setEditForm({
       name: user.name,
-      email: user.email,
       password: "",
       role: user.role,
-      active: user.active,
     });
-    setError("");
+    setToast("");
   }
 
   function resetForm() {
     setForm(emptyForm);
-    setError("");
+    setToast("");
   }
 
   function cancelEdit() {
     setEditingUserId("");
     setEditForm(emptyForm);
-    setError("");
+    setToast("");
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
-    setError("");
+    setToast("");
 
     try {
       const response = await fetch("/api/users", {
@@ -88,7 +142,7 @@ export default function UsersAdminPage() {
       await loadUsers();
       resetForm();
     } catch (requestError) {
-      setError(requestError.message);
+      showToast(requestError.message);
     } finally {
       setSaving(false);
     }
@@ -96,7 +150,7 @@ export default function UsersAdminPage() {
 
   async function saveInlineUser(user) {
     setSaving(true);
-    setError("");
+    setToast("");
 
     try {
       const response = await fetch(`/api/users/${user.id}`, {
@@ -110,17 +164,14 @@ export default function UsersAdminPage() {
       await loadUsers();
       cancelEdit();
     } catch (requestError) {
-      setError(requestError.message);
+      showToast(requestError.message);
     } finally {
       setSaving(false);
     }
   }
 
   async function removeUser(user) {
-    const confirmed = window.confirm(`Borrar ${user.name}?`);
-    if (!confirmed) return;
-
-    setError("");
+    setToast("");
 
     try {
       const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
@@ -129,7 +180,7 @@ export default function UsersAdminPage() {
       await loadUsers();
       if (editingUserId === user.id) cancelEdit();
     } catch (requestError) {
-      setError(requestError.message);
+      showToast(requestError.message);
     }
   }
 
@@ -146,26 +197,16 @@ export default function UsersAdminPage() {
         <div className="tpv-panel-head">
           <div>
             <h2>Alta de usuarios</h2>
-            <span className="tpv-ticket-muted">Administradores y trabajadores</span>
+            <span className="tpv-ticket-muted">Administradores, barra, cocina y camareros</span>
           </div>
         </div>
 
         <form className="tpv-product-form" onSubmit={handleSubmit}>
           <label>
-            <span>Nombre</span>
+            <span>Usuario</span>
             <input
               value={form.name}
               onChange={(event) => updateField("name", event.target.value)}
-              required
-            />
-          </label>
-
-          <label>
-            <span>Email</span>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => updateField("email", event.target.value)}
               required
             />
           </label>
@@ -183,18 +224,11 @@ export default function UsersAdminPage() {
           <label>
             <span>Rol</span>
             <select value={form.role} onChange={(event) => updateField("role", event.target.value)}>
-              <option value="worker">Trabajador</option>
               <option value="admin">Administrador</option>
+              <option value="barra">Barra</option>
+              <option value="camarero">Camarero</option>
+              <option value="cocina">Cocina</option>
             </select>
-          </label>
-
-          <label className="tpv-check">
-            <input
-              checked={form.active}
-              type="checkbox"
-              onChange={(event) => updateField("active", event.target.checked)}
-            />
-            <span>Activo</span>
           </label>
 
           <div className="tpv-form-actions">
@@ -204,29 +238,25 @@ export default function UsersAdminPage() {
           </div>
         </form>
 
-        {error && <div className="tpv-error">{error}</div>}
-
         <div className="tpv-table-wrap">
           <table className="tpv-table">
             <thead>
               <tr>
-                <th>Nombre</th>
-                <th>Email</th>
+                <th>Usuario</th>
                 <th>Clave</th>
                 <th>Rol</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+                <th className="tpv-actions-cell">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan="6">Cargando usuarios...</td>
+                  <td colSpan="4">Cargando usuarios...</td>
                 </tr>
               )}
               {!loading && users.length === 0 && (
                 <tr>
-                  <td colSpan="6">Todavía no hay usuarios.</td>
+                  <td colSpan="4">Todavía no hay usuarios.</td>
                 </tr>
               )}
               {!loading && users.map((user) => {
@@ -247,16 +277,6 @@ export default function UsersAdminPage() {
                       {isEditing ? (
                         <input
                           className="tpv-inline-field"
-                          type="email"
-                          value={editForm.email}
-                          onChange={(event) => updateEditField("email", event.target.value)}
-                        />
-                      ) : user.email}
-                    </td>
-                    <td>
-                      {isEditing ? (
-                        <input
-                          className="tpv-inline-field"
                           type="password"
                           value={editForm.password}
                           onChange={(event) => updateEditField("password", event.target.value)}
@@ -271,28 +291,14 @@ export default function UsersAdminPage() {
                           value={editForm.role}
                           onChange={(event) => updateEditField("role", event.target.value)}
                         >
-                          <option value="worker">Trabajador</option>
                           <option value="admin">Administrador</option>
+                          <option value="barra">Barra</option>
+                          <option value="camarero">Camarero</option>
+                          <option value="cocina">Cocina</option>
                         </select>
-                      ) : user.role === "admin" ? "Administrador" : "Trabajador"}
+                      ) : getRoleLabel(user.role)}
                     </td>
-                    <td>
-                      {isEditing ? (
-                        <label className="tpv-inline-check">
-                          <input
-                            checked={editForm.active}
-                            type="checkbox"
-                            onChange={(event) => updateEditField("active", event.target.checked)}
-                          />
-                          <span>Activo</span>
-                        </label>
-                      ) : (
-                        <span className={user.active ? "tpv-status is-active" : "tpv-status"}>
-                          {user.active ? "Activo" : "Inactivo"}
-                        </span>
-                      )}
-                    </td>
-                    <td>
+                    <td className="tpv-actions-cell">
                       <div className="tpv-row-actions">
                         {isEditing ? (
                           <>
@@ -326,7 +332,12 @@ export default function UsersAdminPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => removeUser(user)}
+                              onClick={() => setConfirmModal({
+                                title: "Borrar usuario",
+                                message: `Se borrará el usuario ${user.name}.`,
+                                confirmLabel: "Borrar",
+                                onConfirm: () => removeUser(user),
+                              })}
                               aria-label={`Borrar ${user.name}`}
                               title="Borrar"
                             >
@@ -343,6 +354,20 @@ export default function UsersAdminPage() {
           </table>
         </div>
       </section>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onCancel={() => setConfirmModal(null)}
+          onConfirm={() => {
+            const action = confirmModal.onConfirm;
+            setConfirmModal(null);
+            action();
+          }}
+        />
+      )}
+      {toast && <div className="tpv-toast" role="status">{toast}</div>}
     </>
   );
 }

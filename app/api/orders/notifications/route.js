@@ -1,4 +1,7 @@
 import { listPendingOrderNotifications } from "../../../../Backend/orders";
+import { subscribeToOrderChanges } from "../../../../Backend/order-events";
+import { listPendingPaymentRequests } from "../../../../Backend/payment-requests";
+import { listPendingWaiterCalls } from "../../../../Backend/waiter-calls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,30 +12,47 @@ export async function GET(request) {
   const stream = new ReadableStream({
     start(controller) {
       let sending = false;
+      let closed = false;
 
       async function sendNotifications() {
-        if (sending) return;
+        if (sending || closed) return;
         sending = true;
 
         try {
-          const notifications = await listPendingOrderNotifications();
+          const [notifications, paymentRequests, waiterCalls] = await Promise.all([
+            listPendingOrderNotifications(),
+            listPendingPaymentRequests(),
+            listPendingWaiterCalls(),
+          ]);
 
+          if (closed) return;
           controller.enqueue(encoder.encode("event: pending-orders\n"));
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(notifications)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...notifications, paymentRequests, waiterCalls })}\n\n`));
         } catch (error) {
-          controller.enqueue(encoder.encode("event: error\n"));
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+          if (!closed) {
+            controller.enqueue(encoder.encode("event: error\n"));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`));
+          }
         } finally {
           sending = false;
         }
       }
 
       sendNotifications();
-      const interval = setInterval(sendNotifications, 2000);
+      const unsubscribe = subscribeToOrderChanges(sendNotifications);
+      const heartbeat = setInterval(() => {
+        if (!closed) controller.enqueue(encoder.encode(": heartbeat\n\n"));
+      }, 25000);
 
       request.signal.addEventListener("abort", () => {
-        clearInterval(interval);
-        controller.close();
+        closed = true;
+        unsubscribe();
+        clearInterval(heartbeat);
+        try {
+          controller.close();
+        } catch {
+          // The client can close while a write is in flight.
+        }
       });
     },
   });

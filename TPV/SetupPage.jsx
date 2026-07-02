@@ -5,7 +5,6 @@ import { useState } from "react";
 export default function SetupPage() {
   const [form, setForm] = useState({
     name: "",
-    email: "",
     password: "",
   });
   const [loading, setLoading] = useState(false);
@@ -50,20 +49,10 @@ export default function SetupPage() {
           ) : (
             <form className="tpv-login-form" onSubmit={handleSubmit}>
               <label>
-                <span>Nombre</span>
+                <span>Usuario</span>
                 <input
                   value={form.name}
                   onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                  required
-                />
-              </label>
-
-              <label>
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
                   required
                 />
               </label>

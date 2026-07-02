@@ -10,11 +10,13 @@ async function ensureCategoriesTable() {
     create table if not exists tpv_categories (
       id uuid primary key default gen_random_uuid(),
       name text not null unique,
+      sort_order integer not null default 0,
       active boolean not null default true,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
   `);
+  await query("alter table tpv_categories add column if not exists sort_order integer not null default 0");
   await query(`
     insert into tpv_categories (name)
     values ('Cubata'), ('Alcohol'), ('Refresco')
@@ -32,6 +34,17 @@ async function ensureCategoriesTable() {
       end if;
     end $$;
   `);
+  await query(`
+    with ranked as (
+      select id, row_number() over (order by name asc)::integer as next_order
+      from tpv_categories
+      where sort_order = 0
+    )
+    update tpv_categories c
+    set sort_order = ranked.next_order
+    from ranked
+    where c.id = ranked.id
+  `);
 
   categoriesTableReady = true;
 }
@@ -40,6 +53,7 @@ function normalizeCategory(row) {
   return {
     id: row.id,
     name: row.name,
+    sortOrder: row.sort_order,
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -63,10 +77,10 @@ export async function listCategories({ includeInactive = true } = {}) {
 
   const result = await query(
     `
-      select id, name, active, created_at, updated_at
+      select id, name, sort_order, active, created_at, updated_at
       from tpv_categories
       where ($1::boolean = true or active = true)
-      order by name asc
+      order by sort_order asc, name asc
     `,
     [includeInactive],
   );
@@ -79,7 +93,7 @@ export async function getCategoryByName(name) {
 
   const result = await query(
     `
-      select id, name, active, created_at, updated_at
+      select id, name, sort_order, active, created_at, updated_at
       from tpv_categories
       where lower(name) = lower($1)
     `,
@@ -95,9 +109,9 @@ export async function createCategory(payload) {
 
   const result = await query(
     `
-      insert into tpv_categories (name, active)
-      values ($1, $2)
-      returning id, name, active, created_at, updated_at
+      insert into tpv_categories (name, sort_order, active)
+      values ($1, (select coalesce(max(sort_order), 0) + 1 from tpv_categories), $2)
+      returning id, name, sort_order, active, created_at, updated_at
     `,
     [category.name, category.active],
   );
@@ -119,7 +133,7 @@ export async function updateCategory(id, payload) {
           active = $3,
           updated_at = now()
       where id = $1
-      returning id, name, active, created_at, updated_at
+      returning id, name, sort_order, active, created_at, updated_at
     `,
     [id, category.name, category.active],
   );
@@ -138,6 +152,30 @@ export async function updateCategory(id, payload) {
   }
 
   return result.rows[0] ? normalizeCategory(result.rows[0]) : null;
+}
+
+export async function reorderCategories(categoryIds = []) {
+  await ensureCategoriesTable();
+
+  const normalizedIds = categoryIds.map((id) => String(id ?? "").trim()).filter(Boolean);
+  if (normalizedIds.length === 0) throw new Error("El orden de categorías no es válido");
+
+  await query(
+    `
+      with ordered as (
+        select id, position::integer as sort_order
+        from unnest($1::uuid[]) with ordinality as item(id, position)
+      )
+      update tpv_categories c
+      set sort_order = ordered.sort_order,
+          updated_at = now()
+      from ordered
+      where c.id = ordered.id
+    `,
+    [normalizedIds],
+  );
+
+  return listCategories();
 }
 
 export async function deleteCategory(id) {

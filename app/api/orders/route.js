@@ -1,4 +1,5 @@
 import { readSessionToken } from "../../../Backend/auth";
+import { notifyOrderChanged } from "../../../Backend/order-events";
 import { createOrder, deleteOrdersByScope, deleteOrdersByTable, listOrders } from "../../../Backend/orders";
 import { getCustomerOrderingState } from "../../../Backend/settings";
 
@@ -53,6 +54,7 @@ export async function POST(request) {
     }
 
     const order = await createOrder(payload);
+    notifyOrderChanged({ type: "created", orderId: order.id, tableNumber: order.tableNumber });
 
     return Response.json({ order }, { status: 201 });
   } catch (error) {
@@ -67,11 +69,13 @@ export async function DELETE(request) {
     const tableNumber = searchParams.get("tableNumber");
     const scope = searchParams.get("scope");
     if (!tableNumber && session.role !== "admin") {
-      throw new Error("No autorizado");
+      return Response.json({ error: "No autorizado" }, { status: 403 });
     }
+
     const deletedCount = tableNumber
       ? await deleteOrdersByTable(tableNumber)
       : await deleteOrdersByScope(scope);
+    notifyOrderChanged({ type: "deleted", scope, tableNumber });
 
     return Response.json({ ok: true, deletedCount, orders: [] });
   } catch (error) {

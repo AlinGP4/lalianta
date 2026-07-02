@@ -1,7 +1,7 @@
 import OrdersMobile from "../../../TPV/OrdersMobile";
 
 export const metadata = {
-  title: "TPV Pedidos - La Lianta",
+  title: "TPV Camarero - La Lianta",
   robots: {
     index: false,
     follow: false,

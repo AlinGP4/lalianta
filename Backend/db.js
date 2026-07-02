@@ -1,4 +1,5 @@
 import pg from "pg";
+import { toFriendlyDatabaseError } from "./friendly-errors";
 
 const { Pool } = pg;
 
@@ -24,7 +25,11 @@ export function getDb() {
 }
 
 export async function query(text, params = []) {
-  return getDb().query(text, params);
+  try {
+    return await getDb().query(text, params);
+  } catch (error) {
+    throw toFriendlyDatabaseError(error);
+  }
 }
 
 export async function checkDatabaseConnection() {

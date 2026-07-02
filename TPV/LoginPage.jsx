@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-export default function LoginPage({ next = "" }) {
-  const [form, setForm] = useState({ email: "", password: "" });
+export default function LoginPage({ next = "", setupAvailable = false }) {
+  const [form, setForm] = useState({ name: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,11 +39,10 @@ export default function LoginPage({ next = "" }) {
 
           <form className="tpv-login-form" onSubmit={handleSubmit}>
             <label>
-              <span>Email</span>
+              <span>Usuario</span>
               <input
-                type="email"
-                value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                value={form.name}
+                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                 autoComplete="username"
                 required
               />
@@ -66,9 +65,11 @@ export default function LoginPage({ next = "" }) {
               {loading ? "Entrando..." : "Entrar"}
             </button>
 
-            <a className="tpv-button tpv-button-secondary" href="/tpv/setup">
-              Configurar primer admin
-            </a>
+            {setupAvailable && (
+              <a className="tpv-button tpv-button-secondary" href="/tpv/setup">
+                Configurar primer admin
+              </a>
+            )}
           </form>
         </div>
       </section>

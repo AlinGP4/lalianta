@@ -1,32 +1,50 @@
 "use client";
 
-import { Bell, CheckCheck, Copy, ExternalLink, Power, Trash2 } from "lucide-react";
+import { Bell, CheckCheck, Copy, ExternalLink, ImagePlus, Lock, Power, Trash2, Unlock } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
+import ConfirmModal from "./ConfirmModal";
 import { applyPendingNotificationsToTables, subscribeToPendingOrderNotifications } from "./orderNotifications";
 
 const qrLogo = {
   src: "/assets/logo-mascot.png",
-  height: 68,
-  width: 68,
+  height: 38,
+  width: 38,
   excavate: true,
 };
 
 const printQrLogo = {
   src: "/assets/logo-mascot.png",
-  height: 68,
-  width: 68,
+  height: 34,
+  width: 34,
   excavate: true,
 };
+
+function getFriendlyTableError(message) {
+  if (message?.includes("tpv_tables_table_number_key") || message?.includes("duplicate key value")) {
+    return "Ya existe una mesa con ese número.";
+  }
+
+  return message || "No se pudo crear la mesa";
+}
 
 export default function TablesAdminPage() {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bulkAction, setBulkAction] = useState("");
+  const [qrPopup, setQrPopup] = useState(null);
+  const [qrPopupFile, setQrPopupFile] = useState(null);
+  const [qrPopupSaving, setQrPopupSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
   const [copiedId, setCopiedId] = useState("");
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [tableNumberDraft, setTableNumberDraft] = useState("");
   const printRef = useRef(null);
+  const toastTimeoutRef = useRef(null);
 
   const origin = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -53,9 +71,35 @@ export default function TablesAdminPage() {
     loadTables();
   }, []);
 
+  useEffect(() => {
+    async function loadQrPopup() {
+      try {
+        const response = await fetch("/api/settings/qr-popup", { cache: "no-store" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudo cargar el popup QR");
+        setQrPopup(data.popup);
+      } catch (requestError) {
+        showToast(requestError.message);
+      }
+    }
+
+    loadQrPopup();
+  }, []);
+
   useEffect(() => subscribeToPendingOrderNotifications((notifications) => {
     setTables((current) => applyPendingNotificationsToTables(current, notifications));
   }), []);
+
+  useEffect(() => () => {
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+  }, []);
+
+  function showToast(message) {
+    setToast(message);
+
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => setToast(""), 2600);
+  }
 
   function getWaiterTableUrl(table) {
     return `${origin}/tpv/pedidos?mesa=${table.number}`;
@@ -65,20 +109,38 @@ export default function TablesAdminPage() {
     return `${origin}/pedido?mesa=${table.number}`;
   }
 
-  async function createTable() {
+  async function createTable(tableNumber = "") {
     setSaving(true);
     setError("");
 
     try {
-      const response = await fetch("/api/tables", { method: "POST" });
+      const response = await fetch("/api/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableNumber }),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo crear la mesa");
       setTables((current) => [...current, data.table].sort((a, b) => a.number - b.number));
+      setTableModalOpen(false);
+      setTableNumberDraft("");
     } catch (requestError) {
-      setError(requestError.message);
+      showToast(getFriendlyTableError(requestError.message));
     } finally {
       setSaving(false);
     }
+  }
+
+  function openTableModal() {
+    setTableNumberDraft("");
+    setTableModalOpen(true);
+    setError("");
+  }
+
+  function closeTableModal() {
+    if (saving) return;
+    setTableModalOpen(false);
+    setTableNumberDraft("");
   }
 
   async function toggleTable(table) {
@@ -107,10 +169,41 @@ export default function TablesAdminPage() {
     }
   }
 
-  async function removeTable(table) {
-    const confirmed = window.confirm(`Eliminar Mesa ${table.number}?`);
-    if (!confirmed) return;
+  async function setAllTablesActive(active) {
+    setBulkAction(active ? "open" : "lock");
+    setError("");
 
+    try {
+      const response = await fetch("/api/tables", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudieron actualizar las mesas");
+
+      const updatedTables = new Map(data.tables.map((table) => [table.id, table]));
+      setTables((current) => current.map((table) => {
+        const updatedTable = updatedTables.get(table.id);
+        if (!updatedTable) return table;
+
+        const pendingOrders = Number(table.pendingOrders ?? updatedTable.pendingOrders ?? 0);
+        return {
+          ...table,
+          ...updatedTable,
+          pendingOrders,
+          hasPendingOrders: pendingOrders > 0,
+        };
+      }));
+      showToast(active ? "Todas las mesas están abiertas." : "Todas las mesas están bloqueadas.");
+    } catch (requestError) {
+      showToast(requestError.message || "No se pudieron actualizar las mesas");
+    } finally {
+      setBulkAction("");
+    }
+  }
+
+  async function removeTable(table) {
     setError("");
 
     try {
@@ -120,6 +213,55 @@ export default function TablesAdminPage() {
       setTables((current) => current.filter((item) => item.id !== table.id));
     } catch (requestError) {
       setError(requestError.message);
+    }
+  }
+
+  async function uploadQrPopup(event) {
+    event.preventDefault();
+    if (!qrPopupFile) {
+      showToast("Selecciona una imagen para el popup.");
+      return;
+    }
+
+    setQrPopupSaving(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("image", qrPopupFile);
+      const response = await fetch("/api/settings/qr-popup", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo guardar el popup QR");
+
+      setQrPopup(data.popup);
+      setQrPopupFile(null);
+      showToast("Popup QR actualizado.");
+    } catch (requestError) {
+      showToast(requestError.message);
+    } finally {
+      setQrPopupSaving(false);
+    }
+  }
+
+  async function removeQrPopup() {
+    setQrPopupSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/settings/qr-popup", { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo quitar el popup QR");
+
+      setQrPopup(data.popup);
+      setQrPopupFile(null);
+      showToast("Popup QR desactivado.");
+    } catch (requestError) {
+      showToast(requestError.message);
+    } finally {
+      setQrPopupSaving(false);
     }
   }
 
@@ -171,6 +313,9 @@ export default function TablesAdminPage() {
     documentTitle: "La Lianta - QRs mesas",
   });
 
+  const hasTables = tables.length > 0;
+  const isBusy = saving || Boolean(bulkAction);
+
   return (
     <>
       <header className="tpv-admin-head">
@@ -183,17 +328,80 @@ export default function TablesAdminPage() {
             className="tpv-button tpv-button-secondary"
             type="button"
             onClick={printQrs}
-            disabled={tables.length === 0}
+            disabled={!hasTables}
           >
             Imprimir QRs
           </button>
-          <button className="tpv-button" type="button" onClick={createTable} disabled={saving}>
+          <button
+            className="tpv-button tpv-button-secondary"
+            type="button"
+            onClick={() => setAllTablesActive(false)}
+            disabled={!hasTables || isBusy}
+          >
+            <Lock aria-hidden="true" size={16} strokeWidth={2.3} />
+            {bulkAction === "lock" ? "Bloqueando" : "Bloquear todas"}
+          </button>
+          <button
+            className="tpv-button tpv-button-secondary"
+            type="button"
+            onClick={() => setAllTablesActive(true)}
+            disabled={!hasTables || isBusy}
+          >
+            <Unlock aria-hidden="true" size={16} strokeWidth={2.3} />
+            {bulkAction === "open" ? "Abriendo" : "Abrir todas"}
+          </button>
+          <button className="tpv-button tpv-button-secondary" type="button" onClick={openTableModal} disabled={isBusy}>
+            Nueva mesa
+          </button>
+          <button className="tpv-button" type="button" onClick={() => createTable()} disabled={isBusy}>
             {saving ? "Creando" : "Nueva mesa +1"}
           </button>
         </div>
       </header>
 
+      {toast && <div className="tpv-toast" role="status">{toast}</div>}
+
       {error && <div className="tpv-error">{error}</div>}
+
+      <section className="tpv-panel tpv-qr-popup-panel" aria-label="Popup para QR de clientes">
+        <div className="tpv-panel-head">
+          <div>
+            <p className="tpv-kicker">QR clientes</p>
+            <h2>Popup después de seleccionar mesa</h2>
+          </div>
+          <span className={qrPopup?.enabled ? "tpv-status is-active" : "tpv-status"}>
+            {qrPopup?.enabled ? "Activo" : "Sin popup"}
+          </span>
+        </div>
+
+        <form className="tpv-qr-popup-form" onSubmit={uploadQrPopup}>
+          <label className="tpv-qr-popup-upload">
+            <ImagePlus aria-hidden="true" size={18} strokeWidth={2.3} />
+            <span>{qrPopupFile ? qrPopupFile.name : "Seleccionar imagen"}</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => setQrPopupFile(event.target.files?.[0] ?? null)}
+              disabled={qrPopupSaving}
+            />
+          </label>
+          <button className="tpv-button" type="submit" disabled={!qrPopupFile || qrPopupSaving}>
+            {qrPopupSaving ? "Guardando..." : "Guardar popup"}
+          </button>
+          {qrPopup?.enabled && (
+            <button className="tpv-button tpv-button-secondary" type="button" onClick={removeQrPopup} disabled={qrPopupSaving}>
+              Quitar popup
+            </button>
+          )}
+        </form>
+
+        {qrPopup?.enabled && (
+          <div className="tpv-qr-popup-preview">
+            <img src={qrPopup.imageUrl} alt="Popup actual de QR" />
+            <span>{qrPopup.fileName || "Imagen actual"}</span>
+          </div>
+        )}
+      </section>
 
       <section className="tpv-table-card-grid" aria-label="Mesas dadas de alta">
         {loading && <article className="tpv-panel">Cargando mesas...</article>}
@@ -222,7 +430,15 @@ export default function TablesAdminPage() {
               </div>
 
               <div className="tpv-qr-box">
-                {origin && <QRCodeSVG value={getCustomerTableUrl(table)} size={180} imageSettings={qrLogo} />}
+                {origin && (
+                  <QRCodeSVG
+                    value={getCustomerTableUrl(table)}
+                    size={200}
+                    level="H"
+                    includeMargin
+                    imageSettings={qrLogo}
+                  />
+                )}
               </div>
 
               <p className="tpv-table-url">{origin ? getCustomerTableUrl(table) : `/pedido?mesa=${table.number}`}</p>
@@ -258,7 +474,12 @@ export default function TablesAdminPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeTable(table)}
+                  onClick={() => setConfirmModal({
+                    title: "Eliminar mesa",
+                    message: `Se eliminará la Mesa ${table.number}.`,
+                    confirmLabel: "Eliminar",
+                    onConfirm: () => removeTable(table),
+                  })}
                   aria-label={`Eliminar Mesa ${table.number}`}
                   title="Eliminar"
                 >
@@ -270,13 +491,76 @@ export default function TablesAdminPage() {
         })}
       </section>
 
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          onCancel={() => setConfirmModal(null)}
+          onConfirm={() => {
+            const action = confirmModal.onConfirm;
+            setConfirmModal(null);
+            action();
+          }}
+        />
+      )}
+
+      {tableModalOpen && (
+        <div className="tpv-modal-backdrop tpv-modal-backdrop-center" role="presentation" onClick={closeTableModal}>
+          <section
+            className="tpv-modal-window tpv-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Nueva mesa"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="tpv-modal-head">
+              <div>
+                <p className="tpv-kicker">Mesas</p>
+                <h2>Nueva mesa</h2>
+              </div>
+            </div>
+
+            <form
+              className="tpv-modal-body tpv-table-modal-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createTable(tableNumberDraft);
+              }}
+            >
+              <label>
+                <span>Número de mesa</span>
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={tableNumberDraft}
+                  onChange={(event) => setTableNumberDraft(event.target.value)}
+                  placeholder="Siguiente disponible"
+                />
+              </label>
+
+              <div className="tpv-modal-foot">
+                <button className="tpv-button tpv-button-secondary" type="button" onClick={closeTableModal} disabled={saving}>
+                  Cancelar
+                </button>
+                <button className="tpv-button" type="submit" disabled={saving}>
+                  {saving ? "Creando..." : "Crear mesa"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       <section className="tpv-print-area" ref={printRef} aria-label="QRs imprimibles">
         {tables.filter((table) => table.active).map((table) => (
           <article className="tpv-print-qr" key={table.id}>
             <h2>Mesa {table.number}</h2>
             <QRCodeSVG
               value={origin ? getCustomerTableUrl(table) : `/pedido?mesa=${table.number}`}
-              size={168}
+              size={180}
+              level="H"
+              includeMargin
               imageSettings={printQrLogo}
             />
             <p>Escanea para abrir pedidos</p>
