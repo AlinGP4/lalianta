@@ -124,10 +124,6 @@ export async function middleware(request) {
       return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
     }
 
-    if (pathname.startsWith("/tpv/historico") && session.role === "camarero") {
-      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
-    }
-
     if (pathname.startsWith("/tpv/barra") && !["admin", "barra"].includes(session.role)) {
       return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
     }

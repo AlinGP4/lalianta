@@ -178,6 +178,8 @@ export default function OrderHistoryPage() {
   }
 
   const isAdmin = sessionRole === "admin";
+  const homeHref = sessionRole === "camarero" ? "/tpv/pedidos" : "/tpv";
+  const homeLabel = sessionRole === "camarero" ? "Mesas" : "Inicio TPV";
 
   return (
     <main className="tpv-page tpv-history-page">
@@ -188,7 +190,7 @@ export default function OrderHistoryPage() {
           <h1>{areaLabels[activeArea]}</h1>
         </div>
         <div className="tpv-head-actions">
-          <Link className="tpv-button tpv-button-secondary" href="/tpv">Inicio TPV</Link>
+          <Link className="tpv-button tpv-button-secondary" href={homeHref}>{homeLabel}</Link>
           {isAdmin && (
             <button
               className="tpv-button tpv-button-danger"

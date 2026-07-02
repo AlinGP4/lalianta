@@ -930,7 +930,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
             <h1>{waiterMainTab === "tables" ? "Mesas" : "Productos"}</h1>
           </div>
           <div className="tpv-phone-actions">
-            <Link className="tpv-phone-admin" href="/tpv/admin/productos">Admin</Link>
+            <Link className="tpv-phone-admin" href="/tpv/historico">Historial</Link>
             <LogoutButton className="tpv-phone-logout" />
           </div>
         </header>
