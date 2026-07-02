@@ -74,6 +74,13 @@ function applyCorsHeaders(request, response) {
   return response;
 }
 
+function getRoleHome(role) {
+  if (role === "admin") return "/tpv";
+  if (role === "camarero") return "/tpv/pedidos";
+  if (role === "cocina" || role === "barra") return "/tpv/historico";
+  return "/tpv/login";
+}
+
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
@@ -105,8 +112,24 @@ export async function middleware(request) {
       return redirectToLogin(request);
     }
 
+    if (pathname === "/tpv" && session.role !== "admin") {
+      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
+    }
+
     if (pathname.startsWith("/tpv/admin") && session.role !== "admin") {
-      return NextResponse.redirect(new URL("/tpv/pedidos", request.url));
+      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
+    }
+
+    if (pathname.startsWith("/tpv/pedidos") && !["admin", "camarero"].includes(session.role)) {
+      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
+    }
+
+    if (pathname.startsWith("/tpv/historico") && session.role === "camarero") {
+      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
+    }
+
+    if (pathname.startsWith("/tpv/barra") && !["admin", "barra"].includes(session.role)) {
+      return NextResponse.redirect(new URL(getRoleHome(session.role), request.url));
     }
 
     return NextResponse.next();

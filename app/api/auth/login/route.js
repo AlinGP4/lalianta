@@ -3,6 +3,13 @@ import { authenticateUser, createSessionToken } from "../../../../Backend/auth";
 
 export const runtime = "nodejs";
 
+function getRoleHome(role) {
+  if (role === "admin") return "/tpv";
+  if (role === "camarero") return "/tpv/pedidos";
+  if (role === "cocina" || role === "barra") return "/tpv/historico";
+  return "/tpv/login";
+}
+
 export async function POST(request) {
   try {
     const payload = await request.json();
@@ -11,11 +18,7 @@ export async function POST(request) {
 
     const response = NextResponse.json({
       user,
-      redirectTo: user.role === "admin"
-        ? "/tpv/admin/productos"
-        : user.role === "camarero"
-        ? "/tpv/pedidos"
-        : "/tpv/historico",
+      redirectTo: getRoleHome(user.role),
     });
 
     response.cookies.set("tpv_session", token, {
