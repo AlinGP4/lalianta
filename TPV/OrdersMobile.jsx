@@ -3,6 +3,7 @@
 import { Ban, CheckCircle2, Minus, Plus, ReceiptText, Search, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ALL_CATEGORY, buildCategoryTabs, filterProductsByCategory } from "./catalogCategories";
 import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
 import ConfirmModal from "./ConfirmModal";
 import { formatPrice } from "./data";
@@ -354,6 +355,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [resettingOrders, setResettingOrders] = useState(false);
   const [cubataDraft, setCubataDraft] = useState(null);
   const [cubataConfigs, setCubataConfigs] = useState([]);
+  const [categoryList, setCategoryList] = useState([]);
+  const [collections, setCollections] = useState([]);
   const [confirmModal, setConfirmModal] = useState(null);
 
   async function loadProductCatalog({ showLoading = false } = {}) {
@@ -361,16 +364,24 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     setError("");
 
     try {
-      const [productsResponse, cubatasResponse] = await Promise.all([
+      const [productsResponse, cubatasResponse, categoriesResponse, collectionsResponse] = await Promise.all([
         fetch("/api/products?includeInactive=false", { cache: "no-store" }),
         fetch("/api/cubatas", { cache: "no-store" }),
+        fetch("/api/categories?includeInactive=false", { cache: "no-store" }),
+        fetch("/api/collections", { cache: "no-store" }),
       ]);
       const productsData = await productsResponse.json();
       const cubatasData = await cubatasResponse.json();
+      const categoriesData = await categoriesResponse.json();
+      const collectionsData = await collectionsResponse.json();
       if (!productsResponse.ok) throw new Error(productsData.error || "No se pudieron cargar los productos");
       if (!cubatasResponse.ok) throw new Error(cubatasData.error || "No se pudo cargar el modo cubata");
+      if (!categoriesResponse.ok) throw new Error(categoriesData.error || "No se pudieron cargar las categorías");
+      if (!collectionsResponse.ok) throw new Error(collectionsData.error || "No se pudieron cargar las colecciones");
       setProductList(productsData.products);
       setCubataConfigs(cubatasData.configs);
+      setCategoryList(categoriesData.categories);
+      setCollections(collectionsData.collections);
       setWaiterTicket((current) => pruneCartByVisibleProducts(current, productsData.products));
     } catch (requestError) {
       setError(requestError.message);
@@ -392,14 +403,20 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const pendingOrdersTotal = pendingTables.reduce((total, table) => total + table.pendingOrders, 0);
   const pendingOrdersLabel = pendingOrdersTotal === 1 ? "1 pedido sin hacer" : `${pendingOrdersTotal} pedidos sin hacer`;
 
-  const categories = useMemo(() => (
-    ["Todo", ...Array.from(new Set(productList.map((product) => product.category)))]
-  ), [productList]);
+  const categories = useMemo(
+    () => buildCategoryTabs({ categories: categoryList, collections, products: productList }),
+    [categoryList, collections, productList],
+  );
 
-  const filteredProducts = useMemo(() => {
-    if (category === "Todo") return productList;
-    return productList.filter((product) => product.category === category);
-  }, [category, productList]);
+  const filteredProducts = useMemo(
+    () => filterProductsByCategory({ category, categories: categoryList, collections, products: productList }),
+    [category, categoryList, collections, productList],
+  );
+
+  useEffect(() => {
+    if (categories.includes(category)) return;
+    setCategory(ALL_CATEGORY);
+  }, [categories, category]);
   const alcoholProducts = useMemo(
     () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "alcohol"),
     [productList],

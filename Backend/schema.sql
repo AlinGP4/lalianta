@@ -16,10 +16,20 @@ create table if not exists tpv_products (
 create table if not exists tpv_categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  kind text not null default 'product' constraint tpv_categories_kind_check check (kind in ('product', 'collection')),
   sort_order integer not null default 0,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists tpv_collection_products (
+  category_id uuid not null references tpv_categories(id) on delete cascade,
+  product_id uuid not null references tpv_products(id) on delete cascade,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (category_id, product_id)
 );
 
 create table if not exists tpv_tables (

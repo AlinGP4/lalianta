@@ -36,6 +36,7 @@ const emptyForm = {
 const emptyCategoryForm = {
   id: "",
   name: "",
+  kind: "product",
   active: true,
 };
 
@@ -63,6 +64,13 @@ export default function ProductCrud() {
     query: "",
     status: "all",
   });
+  const [collections, setCollections] = useState([]);
+  const [collectionQuery, setCollectionQuery] = useState("");
+  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [savingCollection, setSavingCollection] = useState(false);
+  const [collectionError, setCollectionError] = useState("");
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [organizeCategory, setOrganizeCategory] = useState("");
   const [error, setError] = useState("");
   const [categoryError, setCategoryError] = useState("");
   const [cubataError, setCubataError] = useState("");
@@ -81,7 +89,61 @@ export default function ProductCrud() {
     () => categories.filter((category) => category.active),
     [categories],
   );
-  const categoryIds = useMemo(() => categories.map((category) => category.id), [categories]);
+  const productCategories = useMemo(
+    () => categories.filter((category) => category.kind !== "collection"),
+    [categories],
+  );
+  const collectionCategories = useMemo(
+    () => categories.filter((category) => category.kind === "collection"),
+    [categories],
+  );
+  const selectedCollectionCategory = useMemo(
+    () => collectionCategories.find((category) => category.id === selectedCollectionId),
+    [collectionCategories, selectedCollectionId],
+  );
+  const collectionProductIds = useMemo(
+    () => collections.find((collection) => collection.categoryId === selectedCollectionId)?.productIds ?? [],
+    [collections, selectedCollectionId],
+  );
+  const collectionProducts = useMemo(
+    () => collectionProductIds.map((id) => products.find((product) => product.id === id)).filter(Boolean),
+    [collectionProductIds, products],
+  );
+  const collectionItemCounts = useMemo(
+    () => new Map(collections.map((collection) => [collection.categoryId, collection.productIds.length])),
+    [collections],
+  );
+  const collectionCandidates = useMemo(() => {
+    const normalizedQuery = collectionQuery.trim().toLocaleLowerCase("es-ES");
+
+    return products.filter((product) => {
+      if (!product.active) return false;
+      if (!normalizedQuery) return true;
+      return product.name.toLocaleLowerCase("es-ES").includes(normalizedQuery)
+        || product.category.toLocaleLowerCase("es-ES").includes(normalizedQuery);
+    });
+  }, [collectionQuery, products]);
+  const filteredCategories = useMemo(() => {
+    const normalizedQuery = categoryQuery.trim().toLocaleLowerCase("es-ES");
+    if (!normalizedQuery) return categories;
+
+    return categories.filter((category) => (
+      category.name.toLocaleLowerCase("es-ES").includes(normalizedQuery)
+    ));
+  }, [categories, categoryQuery]);
+  const categoryIds = useMemo(
+    () => filteredCategories.map((category) => category.id),
+    [filteredCategories],
+  );
+  const categorySortingDisabled = categoryQuery.trim() !== "";
+  const organizeProducts = useMemo(
+    () => products.filter((product) => product.category === organizeCategory),
+    [organizeCategory, products],
+  );
+  const organizeProductIds = useMemo(
+    () => organizeProducts.map((product) => product.id),
+    [organizeProducts],
+  );
   const productIds = useMemo(() => products.map((product) => product.id), [products]);
   const filteredProducts = useMemo(() => {
     const normalizedQuery = productFilters.query.trim().toLocaleLowerCase("es-ES");
@@ -160,22 +222,27 @@ export default function ProductCrud() {
     setError("");
     setCategoryError("");
     setCubataError("");
+    setCollectionError("");
 
     try {
-      const [productsResponse, categoriesResponse, cubatasResponse] = await Promise.all([
+      const [productsResponse, categoriesResponse, cubatasResponse, collectionsResponse] = await Promise.all([
         fetch("/api/products", { cache: "no-store" }),
         fetch("/api/categories", { cache: "no-store" }),
         fetch("/api/cubatas", { cache: "no-store" }),
+        fetch("/api/collections", { cache: "no-store" }),
       ]);
       const productsData = await productsResponse.json();
       const categoriesData = await categoriesResponse.json();
       const cubatasData = await cubatasResponse.json();
+      const collectionsData = await collectionsResponse.json();
       if (!productsResponse.ok) throw new Error(productsData.error || "No se pudieron cargar los productos");
       if (!categoriesResponse.ok) throw new Error(categoriesData.error || "No se pudieron cargar las categorías");
       if (!cubatasResponse.ok) throw new Error(cubatasData.error || "No se pudo cargar el modo cubata");
+      if (!collectionsResponse.ok) throw new Error(collectionsData.error || "No se pudieron cargar las colecciones");
       setProducts(productsData.products);
       setCategories(categoriesData.categories);
       setCubataConfigs(cubatasData.configs);
+      setCollections(collectionsData.collections);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -199,6 +266,19 @@ export default function ProductCrud() {
     if (alcoholProducts.some((product) => product.id === selectedCubataAlcoholId)) return;
     setSelectedCubataAlcoholId(alcoholProducts[0].id);
   }, [activeTab, alcoholProducts, selectedCubataAlcoholId]);
+
+  useEffect(() => {
+    if (activeTab !== "collections") return;
+    if (collectionCategories.length === 0) return;
+    if (collectionCategories.some((category) => category.id === selectedCollectionId)) return;
+    setSelectedCollectionId(collectionCategories[0].id);
+  }, [activeTab, collectionCategories, selectedCollectionId]);
+
+  useEffect(() => {
+    if (productCategories.length === 0) return;
+    if (productCategories.some((category) => category.name === organizeCategory)) return;
+    setOrganizeCategory(productCategories[0].name);
+  }, [productCategories, organizeCategory]);
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -241,6 +321,7 @@ export default function ProductCrud() {
     setCategoryForm({
       id: category.id,
       name: category.name,
+      kind: category.kind ?? "product",
       active: category.active,
     });
   }
@@ -248,6 +329,64 @@ export default function ProductCrud() {
   function resetCategoryForm() {
     setCategoryForm(emptyCategoryForm);
     setCategoryError("");
+  }
+
+  function setLocalCollection(categoryId, productIds) {
+    setCollections((current) => {
+      const nextCollection = { categoryId, productIds };
+      if (current.some((collection) => collection.categoryId === categoryId)) {
+        return current.map((collection) => (
+          collection.categoryId === categoryId ? nextCollection : collection
+        ));
+      }
+
+      return [...current, nextCollection];
+    });
+  }
+
+  async function saveCollection(categoryId, productIds) {
+    setSavingCollection(true);
+    setCollectionError("");
+
+    try {
+      const response = await fetch("/api/collections", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categoryId, productIds }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "No se pudo guardar la colección");
+      setCollections(data.collections);
+    } catch (requestError) {
+      setCollectionError(requestError.message);
+      await loadCatalog();
+    } finally {
+      setSavingCollection(false);
+    }
+  }
+
+  function toggleCollectionProduct(product) {
+    if (!selectedCollectionId || savingCollection) return;
+
+    const nextProductIds = collectionProductIds.includes(product.id)
+      ? collectionProductIds.filter((id) => id !== product.id)
+      : [...collectionProductIds, product.id];
+
+    setLocalCollection(selectedCollectionId, nextProductIds);
+    saveCollection(selectedCollectionId, nextProductIds);
+  }
+
+  function handleCollectionDragEnd(event) {
+    const { active, over } = event;
+    if (!selectedCollectionId || !over || active.id === over.id) return;
+
+    const oldIndex = collectionProductIds.findIndex((id) => id === active.id);
+    const newIndex = collectionProductIds.findIndex((id) => id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextProductIds = arrayMove(collectionProductIds, oldIndex, newIndex);
+    setLocalCollection(selectedCollectionId, nextProductIds);
+    saveCollection(selectedCollectionId, nextProductIds);
   }
 
   async function saveProduct(event) {
@@ -366,6 +505,24 @@ export default function ProductCrud() {
     saveProductOrder(productCategoryOrderMode ? nextDraggableProducts : nextProducts);
   }
 
+  function handleOrganizeDragEnd(event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = organizeProducts.findIndex((product) => product.id === active.id);
+    const newIndex = organizeProducts.findIndex((product) => product.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const nextOrganizeProducts = arrayMove(organizeProducts, oldIndex, newIndex);
+    const queue = [...nextOrganizeProducts];
+    const nextProducts = products.map((product) => (
+      product.category === organizeCategory ? queue.shift() ?? product : product
+    ));
+
+    setProducts(nextProducts);
+    saveProductOrder(nextOrganizeProducts);
+  }
+
   function handleProductDragStart(event) {
     if (productSortingDisabled) return;
     setActiveProductId(String(event.active.id));
@@ -398,7 +555,7 @@ export default function ProductCrud() {
 
   function handleCategoryDragEnd(event) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (categorySortingDisabled || !over || active.id === over.id) return;
 
     const oldIndex = categories.findIndex((category) => category.id === active.id);
     const newIndex = categories.findIndex((category) => category.id === over.id);
@@ -478,6 +635,7 @@ export default function ProductCrud() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: categoryForm.name,
+          kind: categoryForm.kind,
           active: categoryForm.active,
         }),
       });
@@ -502,6 +660,7 @@ export default function ProductCrud() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: category.name,
+          kind: category.kind,
           active: !category.active,
         }),
       });
@@ -509,11 +668,7 @@ export default function ProductCrud() {
       if (!response.ok) throw new Error(data.error || "No se pudo actualizar la categoría");
       await loadCatalog();
       if (categoryForm.id === category.id) {
-        setCategoryForm({
-          id: data.category.id,
-          name: data.category.name,
-          active: data.category.active,
-        });
+        editCategory(data.category);
       }
     } catch (requestError) {
       setCategoryError(requestError.message);
@@ -546,6 +701,30 @@ export default function ProductCrud() {
         >
           Categorías
           <span>{activeCategories.length}</span>
+        </button>
+        <button
+          id="tpv-organize-tab"
+          className={activeTab === "organize" ? "is-active" : ""}
+          type="button"
+          role="tab"
+          aria-controls="organizacion"
+          aria-selected={activeTab === "organize"}
+          onClick={() => setActiveTab("organize")}
+        >
+          Organización
+          <span>{organizeProducts.length}</span>
+        </button>
+        <button
+          id="tpv-collections-tab"
+          className={activeTab === "collections" ? "is-active" : ""}
+          type="button"
+          role="tab"
+          aria-controls="colecciones"
+          aria-selected={activeTab === "collections"}
+          onClick={() => setActiveTab("collections")}
+        >
+          Colecciones
+          <span>{collectionCategories.length}</span>
         </button>
         <button
           id="tpv-cubatas-tab"
@@ -581,6 +760,16 @@ export default function ProductCrud() {
             placeholder="Alcohol"
           />
         </label>
+        <label>
+          <span>Tipo</span>
+          <select
+            value={categoryForm.kind}
+            onChange={(event) => updateCategoryField("kind", event.target.value)}
+          >
+            <option value="product">Categoría de productos</option>
+            <option value="collection">Colección de categorías</option>
+          </select>
+        </label>
         <label className="tpv-check">
           <input
             checked={categoryForm.active}
@@ -603,15 +792,45 @@ export default function ProductCrud() {
 
       {categoryError && <div className="tpv-error">{categoryError}</div>}
 
+      <section className="tpv-category-filters" aria-label="Filtros de categorías">
+        <label>
+          <span>Buscar</span>
+          <input
+            value={categoryQuery}
+            onChange={(event) => setCategoryQuery(event.target.value)}
+            placeholder="Nombre de categoría"
+          />
+        </label>
+        <button
+          className="tpv-button tpv-button-secondary"
+          type="button"
+          onClick={() => setCategoryQuery("")}
+          disabled={!categorySortingDisabled}
+        >
+          Limpiar filtro
+        </button>
+      </section>
+
+      {categorySortingDisabled && (
+        <p className="tpv-product-filter-note">
+          Mostrando {filteredCategories.length} de {categories.length}. Limpia el filtro para ordenar manualmente.
+        </p>
+      )}
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
         <SortableContext items={categoryIds} strategy={verticalListSortingStrategy}>
           <div className="tpv-category-list">
             {loading && <span className="tpv-ticket-muted">Cargando categorías...</span>}
             {!loading && categories.length === 0 && <span className="tpv-ticket-muted">Todavía no hay categorías.</span>}
-            {!loading && categories.map((category) => (
+            {!loading && categories.length > 0 && filteredCategories.length === 0 && (
+              <span className="tpv-ticket-muted">No hay categorías con ese nombre.</span>
+            )}
+            {!loading && filteredCategories.map((category) => (
               <SortableCategoryItem
                 category={category}
                 key={category.id}
+                disabled={categorySortingDisabled}
+                itemCount={collectionItemCounts.get(category.id) ?? 0}
                 onEdit={editCategory}
                 onToggleActive={toggleCategoryActive}
                 setConfirmModal={setConfirmModal}
@@ -620,6 +839,154 @@ export default function ProductCrud() {
           </div>
         </SortableContext>
       </DndContext>
+    </article>
+    )}
+
+    {activeTab === "organize" && (
+    <article className="tpv-panel tpv-products-panel" id="organizacion" role="tabpanel" aria-labelledby="tpv-organize-tab">
+      <div className="tpv-panel-head">
+        <div>
+          <p className="tpv-kicker">Carta</p>
+          <h2>Organización</h2>
+        </div>
+        <span className="tpv-count">
+          {sortingProducts ? "Guardando orden..." : `${organizeProducts.length} productos`}
+        </span>
+      </div>
+
+      {error && <div className="tpv-error">{error}</div>}
+
+      {productCategories.length === 0 && (
+        <div className="tpv-history-empty">
+          Crea una categoría de productos para poder ordenar su contenido.
+        </div>
+      )}
+
+      {productCategories.length > 0 && (
+        <div className="tpv-collection-config">
+          <label className="tpv-cubata-selector">
+            <span>Categoría</span>
+            <select value={organizeCategory} onChange={(event) => setOrganizeCategory(event.target.value)}>
+              {productCategories.map((category) => (
+                <option key={category.id} value={category.name}>
+                  {category.name}{category.active ? "" : " (oculta)"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p className="tpv-product-filter-note">
+            Arrastra para fijar el orden en que se ven dentro de {organizeCategory || "la categoría"} al pedir.
+          </p>
+
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleOrganizeDragEnd}>
+            <SortableContext items={organizeProductIds} strategy={verticalListSortingStrategy}>
+              <div className="tpv-collection-sort-list tpv-organize-list">
+                {loading && <span className="tpv-ticket-muted">Cargando productos...</span>}
+                {!loading && organizeProducts.length === 0 && (
+                  <span className="tpv-ticket-muted">No hay productos en esta categoría.</span>
+                )}
+                {!loading && organizeProducts.map((product) => (
+                  <SortableOrganizeItem key={product.id} product={product} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+    </article>
+    )}
+
+    {activeTab === "collections" && (
+    <article className="tpv-panel tpv-products-panel" id="colecciones" role="tabpanel" aria-labelledby="tpv-collections-tab">
+      <div className="tpv-panel-head">
+        <div>
+          <p className="tpv-kicker">Carta</p>
+          <h2>Colecciones</h2>
+        </div>
+        <span className="tpv-count">
+          {savingCollection ? "Guardando..." : `${collectionProductIds.length} productos`}
+        </span>
+      </div>
+
+      {collectionError && <div className="tpv-error">{collectionError}</div>}
+
+      {collectionCategories.length === 0 && (
+        <div className="tpv-history-empty">
+          Crea una categoría de tipo colección para agrupar aquí productos de otras categorías.
+        </div>
+      )}
+
+      {collectionCategories.length > 0 && (
+        <div className="tpv-collection-config">
+          <label className="tpv-cubata-selector">
+            <span>Colección</span>
+            <select value={selectedCollectionId} onChange={(event) => setSelectedCollectionId(event.target.value)}>
+              {collectionCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}{category.active ? "" : " (oculta)"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p className="tpv-product-filter-note">
+            Los productos que elijas seguirán apareciendo también en su categoría original.
+          </p>
+
+          <div className="tpv-collection-grid">
+            <div className="tpv-collection-column">
+              <label className="tpv-collection-search">
+                <span>Buscar producto</span>
+                <input
+                  value={collectionQuery}
+                  onChange={(event) => setCollectionQuery(event.target.value)}
+                  placeholder="Nombre o categoría"
+                />
+              </label>
+              <div className="tpv-collection-option-list">
+                {collectionCandidates.length === 0 && (
+                  <span className="tpv-ticket-muted">No hay productos activos con esa búsqueda.</span>
+                )}
+                {collectionCandidates.map((product) => {
+                  const selected = collectionProductIds.includes(product.id);
+
+                  return (
+                    <button
+                      className={selected ? "is-selected" : ""}
+                      key={product.id}
+                      type="button"
+                      onClick={() => toggleCollectionProduct(product)}
+                    >
+                      <span>{product.name}</span>
+                      <em>{product.category}</em>
+                      <strong>{selected ? "Incluido" : "Añadir"}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="tpv-collection-column">
+              <h4>Orden para el cliente</h4>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCollectionDragEnd}>
+                <SortableContext items={collectionProductIds} strategy={verticalListSortingStrategy}>
+                  <div className="tpv-collection-sort-list">
+                    {collectionProducts.length === 0 && (
+                      <span className="tpv-ticket-muted">
+                        Todavía no has añadido productos a {selectedCollectionCategory?.name ?? "esta colección"}.
+                      </span>
+                    )}
+                    {collectionProducts.map((product) => (
+                      <SortableMixerItem key={product.id} product={product} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
     )}
 
@@ -723,7 +1090,7 @@ export default function ProductCrud() {
             onChange={(event) => updateField("category", event.target.value)}
           >
             <option value="">Seleccionar</option>
-            {categories.map((category) => (
+            {productCategories.map((category) => (
               <option key={category.id} value={category.name} disabled={!category.active}>
                 {category.name}{category.active ? "" : " (oculta)"}
               </option>
@@ -785,7 +1152,7 @@ export default function ProductCrud() {
           <span>Categoría</span>
           <select value={productFilters.category} onChange={(event) => updateProductFilter("category", event.target.value)}>
             <option value="all">Todas</option>
-            {categories.map((category) => (
+            {productCategories.map((category) => (
               <option key={category.id} value={category.name}>{category.name}</option>
             ))}
           </select>
@@ -914,6 +1281,41 @@ function SortableMixerItem({ product }) {
   );
 }
 
+function SortableOrganizeItem({ product }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: product.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div className={isDragging ? "tpv-cubata-sort-item is-dragging" : "tpv-cubata-sort-item"} ref={setNodeRef} style={style}>
+      <button
+        className="tpv-drag-handle"
+        type="button"
+        aria-label={`Cambiar orden de ${product.name}`}
+        title="Arrastrar para ordenar"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical aria-hidden="true" size={17} strokeWidth={2.2} />
+      </button>
+      <strong className="tpv-organize-name">{product.name}</strong>
+      <span className="tpv-organize-price">{formatPrice(product.price)}</span>
+      <span className={product.soldOut ? "tpv-status is-sold-out" : product.active ? "tpv-status is-active" : "tpv-status"}>
+        {product.soldOut ? "Agotado" : product.active ? "Activo" : "Oculto"}
+      </span>
+    </div>
+  );
+}
+
 function ProductDragPreview({ product, width }) {
   return (
     <div className="tpv-product-order-item tpv-product-order-preview" style={width ? { width } : undefined}>
@@ -935,7 +1337,7 @@ function ProductDragPreview({ product, width }) {
   );
 }
 
-function SortableCategoryItem({ category, onEdit, onToggleActive, setConfirmModal }) {
+function SortableCategoryItem({ category, disabled = false, itemCount = 0, onEdit, onToggleActive, setConfirmModal }) {
   const {
     attributes,
     listeners,
@@ -943,19 +1345,26 @@ function SortableCategoryItem({ category, onEdit, onToggleActive, setConfirmModa
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: category.id });
+  } = useSortable({ disabled, id: category.id });
+  const isCollection = category.kind === "collection";
+  const className = [
+    "tpv-category-item",
+    isCollection ? "is-collection" : "",
+    isDragging ? "is-dragging" : "",
+  ].filter(Boolean).join(" ");
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
   return (
-    <div className={isDragging ? "tpv-category-item is-dragging" : "tpv-category-item"} ref={setNodeRef} style={style}>
+    <div className={className} ref={setNodeRef} style={style}>
       <button
-        className="tpv-drag-handle"
+        className={disabled ? "tpv-drag-handle is-disabled" : "tpv-drag-handle"}
         type="button"
         aria-label={`Cambiar orden de ${category.name}`}
         title="Arrastrar para ordenar"
+        disabled={disabled}
         {...attributes}
         {...listeners}
       >
@@ -963,6 +1372,9 @@ function SortableCategoryItem({ category, onEdit, onToggleActive, setConfirmModa
       </button>
       <div>
         <strong>{category.name}</strong>
+        <span className="tpv-category-kind">
+          {isCollection ? `Colección · ${itemCount}` : "Productos"}
+        </span>
         <span className={category.active ? "tpv-status is-active" : "tpv-status"}>{category.active ? "Activa" : "Oculta"}</span>
       </div>
       <div className="tpv-row-actions">

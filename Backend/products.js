@@ -1,4 +1,4 @@
-import { getCategoryByName } from "./categories";
+import { CATEGORY_KIND_COLLECTION, getCategoryByName } from "./categories";
 import { query } from "./db";
 
 let productsTableReady = false;
@@ -65,6 +65,9 @@ async function normalizePayload(payload) {
   const savedCategory = await getCategoryByName(category);
   if (!savedCategory) throw new Error("La categoría no existe");
   if (!savedCategory.active) throw new Error("La categoría está oculta");
+  if (savedCategory.kind === CATEGORY_KIND_COLLECTION) {
+    throw new Error("Una colección no puede contener productos directamente");
+  }
   if (!Number.isInteger(priceCents) || priceCents < 0) throw new Error("El precio no es válido");
 
   return {

@@ -3,14 +3,17 @@
 import { Minus, Plus, ReceiptText, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { buildCategoryTabs, filterProductsByCategory } from "./catalogCategories";
 import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
 import { formatPrice } from "./data";
 import LogoutButton from "./LogoutButton";
 
 export default function BarSalesPage() {
-  const [category, setCategory] = useState("Todo");
+  const [category, setCategory] = useState("");
   const [cart, setCart] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categoryList, setCategoryList] = useState([]);
+  const [collections, setCollections] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
   const [cashOpen, setCashOpen] = useState(null);
   const [selling, setSelling] = useState(false);
@@ -22,10 +25,20 @@ export default function BarSalesPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/products?includeInactive=false", { cache: "no-store" });
+      const [response, categoriesResponse, collectionsResponse] = await Promise.all([
+        fetch("/api/products?includeInactive=false", { cache: "no-store" }),
+        fetch("/api/categories?includeInactive=false", { cache: "no-store" }),
+        fetch("/api/collections", { cache: "no-store" }),
+      ]);
       const data = await response.json();
+      const categoriesData = await categoriesResponse.json();
+      const collectionsData = await collectionsResponse.json();
       if (!response.ok) throw new Error(data.error || "No se pudieron cargar los productos");
+      if (!categoriesResponse.ok) throw new Error(categoriesData.error || "No se pudieron cargar las categorías");
+      if (!collectionsResponse.ok) throw new Error(collectionsData.error || "No se pudieron cargar las colecciones");
       setProducts(data.products);
+      setCategoryList(categoriesData.categories);
+      setCollections(collectionsData.collections);
       setCart((current) => pruneCartByVisibleProducts(current, data.products));
     } catch (requestError) {
       setError(requestError.message);
@@ -57,14 +70,20 @@ export default function BarSalesPage() {
     })
   ), []);
 
-  const categories = useMemo(() => (
-    ["Todo", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))]
-  ), [products]);
+  const categories = useMemo(
+    () => buildCategoryTabs({ categories: categoryList, collections, products, includeAll: false }),
+    [categoryList, collections, products],
+  );
 
-  const filteredProducts = useMemo(() => {
-    if (category === "Todo") return products;
-    return products.filter((product) => product.category === category);
-  }, [category, products]);
+  const filteredProducts = useMemo(
+    () => filterProductsByCategory({ category, categories: categoryList, collections, products }),
+    [category, categoryList, collections, products],
+  );
+
+  useEffect(() => {
+    if (categories.length === 0 || categories.includes(category)) return;
+    setCategory(categories[0]);
+  }, [categories, category]);
 
   const total = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
   const lineCount = cart.reduce((sum, item) => sum + item.qty, 0);
