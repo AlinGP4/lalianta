@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Ban, CheckCircle2, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { ArrowRight, Ban, CheckCircle2, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { subscribeToCatalogChanges } from "./catalogRealtime";
@@ -329,6 +329,17 @@ export default function ProductCrud() {
   function resetCategoryForm() {
     setCategoryForm(emptyCategoryForm);
     setCategoryError("");
+  }
+
+  function openCategoryContent(category) {
+    if (category.kind === "collection") {
+      setSelectedCollectionId(category.id);
+      setActiveTab("collections");
+      return;
+    }
+
+    setOrganizeCategory(category.name);
+    setActiveTab("organize");
   }
 
   function setLocalCollection(categoryId, productIds) {
@@ -832,6 +843,7 @@ export default function ProductCrud() {
                 disabled={categorySortingDisabled}
                 itemCount={collectionItemCounts.get(category.id) ?? 0}
                 onEdit={editCategory}
+                onOpen={openCategoryContent}
                 onToggleActive={toggleCategoryActive}
                 setConfirmModal={setConfirmModal}
               />
@@ -1337,7 +1349,7 @@ function ProductDragPreview({ product, width }) {
   );
 }
 
-function SortableCategoryItem({ category, disabled = false, itemCount = 0, onEdit, onToggleActive, setConfirmModal }) {
+function SortableCategoryItem({ category, disabled = false, itemCount = 0, onEdit, onOpen, onToggleActive, setConfirmModal }) {
   const {
     attributes,
     listeners,
@@ -1378,6 +1390,16 @@ function SortableCategoryItem({ category, disabled = false, itemCount = 0, onEdi
         <span className={category.active ? "tpv-status is-active" : "tpv-status"}>{category.active ? "Activa" : "Oculta"}</span>
       </div>
       <div className="tpv-row-actions">
+        <button
+          type="button"
+          onClick={() => onOpen(category)}
+          aria-label={isCollection
+            ? `Elegir los productos de ${category.name}`
+            : `Ordenar los productos de ${category.name}`}
+          title={isCollection ? "Elegir sus productos" : "Ordenar sus productos"}
+        >
+          <ArrowRight aria-hidden="true" size={16} strokeWidth={2.2} />
+        </button>
         <button type="button" onClick={() => onEdit(category)} aria-label={`Editar ${category.name}`} title="Editar">
           <Pencil aria-hidden="true" size={16} strokeWidth={2.2} />
         </button>
