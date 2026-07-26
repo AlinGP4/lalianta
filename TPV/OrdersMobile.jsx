@@ -3,7 +3,7 @@
 import { Ban, CheckCircle2, Minus, Plus, ReceiptText, Search, ShoppingCart, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ALL_CATEGORY, buildCategoryTabs, filterProductsByCategory } from "./catalogCategories";
+import { buildCategoryTabs, filterProductsByCategory } from "./catalogCategories";
 import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
 import ConfirmModal from "./ConfirmModal";
 import { formatPrice } from "./data";
@@ -21,11 +21,14 @@ function isCubataProduct(product) {
 }
 
 function buildCubataItem(product, alcoholProduct, refrescoProduct) {
+  const supplement = (refrescoProduct.supplementCents ?? 0) / 100;
+
   return {
     ...product,
     alcoholProductId: alcoholProduct.id,
     id: `${product.id}:${alcoholProduct.id}:${refrescoProduct.id}`,
     name: `${product.name} - ${alcoholProduct.name} + ${refrescoProduct.name}`,
+    price: product.price + supplement,
     productId: product.id,
     refrescoProductId: refrescoProduct.id,
   };
@@ -326,7 +329,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [selectedTable, setSelectedTable] = useState(initialTableNumber);
   const [tables, setTables] = useState([]);
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("Todo");
+  const [category, setCategory] = useState("");
   const [waiterTicket, setWaiterTicket] = useState([]);
   const [waiterCartOpen, setWaiterCartOpen] = useState(false);
   const [waiterTicketOpen, setWaiterTicketOpen] = useState(false);
@@ -355,6 +358,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const [resettingOrders, setResettingOrders] = useState(false);
   const [cubataDraft, setCubataDraft] = useState(null);
   const [cubataConfigs, setCubataConfigs] = useState([]);
+  const [cubataMixerProducts, setCubataMixerProducts] = useState([]);
   const [categoryList, setCategoryList] = useState([]);
   const [collections, setCollections] = useState([]);
   const [confirmModal, setConfirmModal] = useState(null);
@@ -380,6 +384,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
       if (!collectionsResponse.ok) throw new Error(collectionsData.error || "No se pudieron cargar las colecciones");
       setProductList(productsData.products);
       setCubataConfigs(cubatasData.configs);
+      setCubataMixerProducts(cubatasData.mixerProducts ?? []);
       setCategoryList(categoriesData.categories);
       setCollections(collectionsData.collections);
       setWaiterTicket((current) => pruneCartByVisibleProducts(current, productsData.products));
@@ -404,7 +409,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   const pendingOrdersLabel = pendingOrdersTotal === 1 ? "1 pedido sin hacer" : `${pendingOrdersTotal} pedidos sin hacer`;
 
   const categories = useMemo(
-    () => buildCategoryTabs({ categories: categoryList, collections, products: productList }),
+    () => buildCategoryTabs({ categories: categoryList, collections, products: productList, includeAll: false }),
     [categoryList, collections, productList],
   );
 
@@ -414,27 +419,47 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
   );
 
   useEffect(() => {
-    if (categories.includes(category)) return;
-    setCategory(ALL_CATEGORY);
+    if (categories.length === 0 || categories.includes(category)) return;
+    setCategory(categories[0]);
   }, [categories, category]);
+  // Los alcoholes y refrescos del cubata vienen de /api/cubatas para que sigan
+  // disponibles aunque su categoría esté oculta en la carta.
+  const cubataCatalog = cubataMixerProducts.length > 0 ? cubataMixerProducts : productList;
   const alcoholProducts = useMemo(
-    () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "alcohol"),
-    [productList],
+    () => cubataCatalog.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "alcohol"),
+    [cubataCatalog],
   );
   const refrescoProducts = useMemo(
-    () => productList.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "refresco"),
-    [productList],
+    () => cubataCatalog.filter((product) => product.active && product.category?.toLocaleLowerCase("es-ES") === "refresco"),
+    [cubataCatalog],
   );
   const cubataRefrescoProducts = useMemo(() => {
     if (!cubataDraft?.alcoholProductId) return refrescoProducts;
 
     const config = cubataConfigs.find((item) => item.alcoholProductId === cubataDraft.alcoholProductId);
-    if (!config || config.mixerProductIds.length === 0) return refrescoProducts;
+    const mixers = config?.mixers ?? [];
+    if (mixers.length === 0) return refrescoProducts;
 
-    return config.mixerProductIds
-      .map((id) => refrescoProducts.find((product) => product.id === id))
+    return mixers
+      .map((mixer) => {
+        const product = refrescoProducts.find((item) => item.id === mixer.productId);
+        return product ? { ...product, supplementCents: mixer.supplementCents ?? 0 } : null;
+      })
       .filter(Boolean);
   }, [cubataConfigs, cubataDraft?.alcoholProductId, refrescoProducts]);
+  const cubataAlcoholProducts = useMemo(() => alcoholProducts.map((product) => {
+    const config = cubataConfigs.find((item) => item.alcoholProductId === product.id);
+    const supplements = (config?.mixers ?? []).map((mixer) => mixer.supplementCents ?? 0);
+    if (supplements.length === 0) return product;
+
+    const minSupplementCents = Math.min(...supplements);
+
+    return {
+      ...product,
+      supplementCents: minSupplementCents,
+      supplementFrom: Math.max(...supplements) > minSupplementCents,
+    };
+  }), [alcoholProducts, cubataConfigs]);
   const selectedCubataAlcohol = useMemo(
     () => alcoholProducts.find((product) => product.id === cubataDraft?.alcoholProductId),
     [alcoholProducts, cubataDraft?.alcoholProductId],
@@ -444,6 +469,8 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
     [cubataRefrescoProducts, cubataDraft?.refrescoProductId],
   );
   const cubataStep = cubataDraft?.step ?? "alcohol";
+  const cubataTotalPrice = (cubataDraft?.product.price ?? 0)
+    + (selectedCubataRefresco?.supplementCents ?? 0) / 100;
 
   const waiterTotal = waiterTicket.reduce((sum, item) => sum + item.qty * item.price, 0);
   const waiterLineCount = waiterTicket.reduce((sum, item) => sum + item.qty, 0);
@@ -1463,7 +1490,7 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
               {cubataStep === "alcohol" && (
                 <MixerColumn
                   label="1. Alcohol"
-                  products={alcoholProducts}
+                  products={cubataAlcoholProducts}
                   selectedId={cubataDraft.alcoholProductId}
                   onSelect={selectCubataAlcohol}
                 />
@@ -1480,6 +1507,10 @@ export default function OrdersMobile({ initialTableNumber = "" }) {
                 <div className="tpv-mixer-summary">
                   <MixerChoiceSummary label="Alcohol" product={selectedCubataAlcohol} />
                   <MixerChoiceSummary label="Refresco" product={selectedCubataRefresco} />
+                  <div className="tpv-mixer-choice tpv-mixer-choice-total">
+                    <span>Total</span>
+                    <strong>{formatPrice(cubataTotalPrice)}</strong>
+                  </div>
                 </div>
               )}
             </div>
@@ -1665,10 +1696,13 @@ function MixerSteps({ step }) {
 }
 
 function MixerChoiceSummary({ label, product }) {
+  const supplementCents = product?.supplementCents ?? 0;
+
   return (
     <div className="tpv-mixer-choice">
       <span>{label}</span>
       <strong>{product?.name ?? "Sin seleccionar"}</strong>
+      {supplementCents > 0 && <small>Suplemento +{formatPrice(supplementCents / 100)}</small>}
     </div>
   );
 }
@@ -1748,6 +1782,11 @@ function MixerColumn({ label, products, selectedId, onSelect }) {
             onClick={() => onSelect(product.id)}
           >
             <strong>{product.name}</strong>
+            {product.supplementCents > 0 && (
+              <small className="tpv-mixer-supplement">
+                {product.supplementFrom ? "desde " : ""}+{formatPrice(product.supplementCents / 100)}
+              </small>
+            )}
             {product.soldOut && <small>Agotado</small>}
           </button>
         ))}

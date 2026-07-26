@@ -82,6 +82,7 @@ create table if not exists tpv_order_items (
 create table if not exists tpv_cubata_mixers (
   alcohol_product_id uuid not null references tpv_products(id) on delete cascade,
   refresco_product_id uuid not null references tpv_products(id) on delete cascade,
+  supplement_cents integer not null default 0 check (supplement_cents >= 0),
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

@@ -1,5 +1,5 @@
 import { getDb, query } from "./db";
-import { getCubataMixerIds } from "./cubatas";
+import { getCubataMixers } from "./cubatas";
 import { ensureProductsTable, getProduct } from "./products";
 import { getTableByNumber } from "./tables";
 
@@ -136,11 +136,13 @@ async function normalizeItems(items = [], { source = "waiter" } = {}) {
 
         assertMixerProduct(alcoholProduct, "alcohol", "Alcohol");
         assertMixerProduct(refrescoProduct, "refresco", "Refresco");
-        const configuredMixerIds = await getCubataMixerIds(alcoholProductId);
-        if (configuredMixerIds.length > 0 && !configuredMixerIds.includes(refrescoProductId)) {
+        const configuredMixers = await getCubataMixers(alcoholProductId);
+        const configuredMixer = configuredMixers.find((mixer) => mixer.productId === refrescoProductId);
+        if (configuredMixers.length > 0 && !configuredMixer) {
           throw new Error(`${refrescoProduct.name} no está configurado para ${alcoholProduct.name}`);
         }
         productName = `${product.name} - ${alcoholProduct.name} + ${refrescoProduct.name}`;
+        unitPriceCents += configuredMixer?.supplementCents ?? 0;
       }
     }
 

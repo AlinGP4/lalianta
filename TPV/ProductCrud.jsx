@@ -46,6 +46,16 @@ function normalizeCategory(value) {
     .toLocaleLowerCase("es-ES");
 }
 
+function parseSupplementCents(value) {
+  const supplementCents = Math.round(Number(String(value ?? "").replace(",", ".")) * 100);
+  if (!Number.isFinite(supplementCents) || supplementCents < 0) return 0;
+  return supplementCents;
+}
+
+function formatSupplementInput(supplementCents) {
+  return supplementCents > 0 ? (supplementCents / 100).toFixed(2) : "";
+}
+
 export default function ProductCrud() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -77,6 +87,7 @@ export default function ProductCrud() {
   const [cubataConfigs, setCubataConfigs] = useState([]);
   const [selectedCubataAlcoholId, setSelectedCubataAlcoholId] = useState("");
   const [savingCubataConfig, setSavingCubataConfig] = useState(false);
+  const [bulkSupplement, setBulkSupplement] = useState("");
   const [activeTab, setActiveTab] = useState("products");
   const [confirmModal, setConfirmModal] = useState(null);
   const productOrderListRef = useRef(null);
@@ -204,13 +215,22 @@ export default function ProductCrud() {
     () => cubataConfigs.find((config) => config.alcoholProductId === selectedCubataAlcoholId),
     [cubataConfigs, selectedCubataAlcoholId],
   );
-  const selectedMixerIds = useMemo(
-    () => selectedCubataConfig?.mixerProductIds ?? [],
+  const selectedMixers = useMemo(
+    () => selectedCubataConfig?.mixers ?? [],
     [selectedCubataConfig],
   );
+  const selectedMixerIds = useMemo(
+    () => selectedMixers.map((mixer) => mixer.productId),
+    [selectedMixers],
+  );
   const selectedMixerProducts = useMemo(
-    () => selectedMixerIds.map((id) => refrescoProducts.find((product) => product.id === id)).filter(Boolean),
-    [refrescoProducts, selectedMixerIds],
+    () => selectedMixers
+      .map((mixer) => {
+        const product = refrescoProducts.find((item) => item.id === mixer.productId);
+        return product ? { ...product, supplementCents: mixer.supplementCents ?? 0 } : null;
+      })
+      .filter(Boolean),
+    [refrescoProducts, selectedMixers],
   );
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -577,9 +597,13 @@ export default function ProductCrud() {
     saveCategoryOrder(nextCategories);
   }
 
-  function setLocalCubataConfig(alcoholProductId, mixerProductIds) {
+  function setLocalCubataConfig(alcoholProductId, mixers) {
     setCubataConfigs((current) => {
-      const nextConfig = { alcoholProductId, mixerProductIds };
+      const nextConfig = {
+        alcoholProductId,
+        mixerProductIds: mixers.map((mixer) => mixer.productId),
+        mixers,
+      };
       if (current.some((config) => config.alcoholProductId === alcoholProductId)) {
         return current.map((config) => (
           config.alcoholProductId === alcoholProductId ? nextConfig : config
@@ -590,7 +614,7 @@ export default function ProductCrud() {
     });
   }
 
-  async function saveCubataConfig(alcoholProductId, mixerProductIds) {
+  async function saveCubataConfig(alcoholProductId, mixers) {
     setSavingCubataConfig(true);
     setCubataError("");
 
@@ -598,7 +622,7 @@ export default function ProductCrud() {
       const response = await fetch("/api/cubatas", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alcoholProductId, mixerProductIds }),
+        body: JSON.stringify({ alcoholProductId, mixers }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo guardar el modo cubata");
@@ -611,15 +635,36 @@ export default function ProductCrud() {
     }
   }
 
+  function applyCubataMixers(mixers) {
+    setLocalCubataConfig(selectedCubataAlcoholId, mixers);
+    saveCubataConfig(selectedCubataAlcoholId, mixers);
+  }
+
   function toggleCubataMixer(refrescoProduct) {
     if (!selectedCubataAlcoholId || savingCubataConfig) return;
 
-    const nextMixerIds = selectedMixerIds.includes(refrescoProduct.id)
-      ? selectedMixerIds.filter((id) => id !== refrescoProduct.id)
-      : [...selectedMixerIds, refrescoProduct.id];
+    const nextMixers = selectedMixerIds.includes(refrescoProduct.id)
+      ? selectedMixers.filter((mixer) => mixer.productId !== refrescoProduct.id)
+      : [...selectedMixers, { productId: refrescoProduct.id, supplementCents: 0 }];
 
-    setLocalCubataConfig(selectedCubataAlcoholId, nextMixerIds);
-    saveCubataConfig(selectedCubataAlcoholId, nextMixerIds);
+    applyCubataMixers(nextMixers);
+  }
+
+  function setCubataMixerSupplement(refrescoProductId, supplementCents) {
+    if (!selectedCubataAlcoholId || savingCubataConfig) return;
+
+    const currentMixer = selectedMixers.find((mixer) => mixer.productId === refrescoProductId);
+    if (!currentMixer || (currentMixer.supplementCents ?? 0) === supplementCents) return;
+
+    applyCubataMixers(selectedMixers.map((mixer) => (
+      mixer.productId === refrescoProductId ? { ...mixer, supplementCents } : mixer
+    )));
+  }
+
+  function setAllCubataMixerSupplements(supplementCents) {
+    if (!selectedCubataAlcoholId || savingCubataConfig || selectedMixers.length === 0) return;
+
+    applyCubataMixers(selectedMixers.map((mixer) => ({ ...mixer, supplementCents })));
   }
 
   function handleCubataMixerDragEnd(event) {
@@ -630,9 +675,7 @@ export default function ProductCrud() {
     const newIndex = selectedMixerIds.findIndex((id) => id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const nextMixerIds = arrayMove(selectedMixerIds, oldIndex, newIndex);
-    setLocalCubataConfig(selectedCubataAlcoholId, nextMixerIds);
-    saveCubataConfig(selectedCubataAlcoholId, nextMixerIds);
+    applyCubataMixers(arrayMove(selectedMixers, oldIndex, newIndex));
   }
 
   async function saveCategory(event) {
@@ -1024,7 +1067,13 @@ export default function ProductCrud() {
         <div className="tpv-cubata-config">
           <label className="tpv-cubata-selector">
             <span>Alcohol</span>
-            <select value={selectedCubataAlcoholId} onChange={(event) => setSelectedCubataAlcoholId(event.target.value)}>
+            <select
+              value={selectedCubataAlcoholId}
+              onChange={(event) => {
+                setSelectedCubataAlcoholId(event.target.value);
+                setBulkSupplement("");
+              }}
+            >
               {alcoholProducts.map((product) => (
                 <option key={product.id} value={product.id}>{product.name}</option>
               ))}
@@ -1054,7 +1103,36 @@ export default function ProductCrud() {
             </div>
 
             <div className="tpv-cubata-column">
-              <h3>Orden para el cliente</h3>
+              <h3>Orden y suplementos</h3>
+              <p className="tpv-product-filter-note">
+                El suplemento se suma al precio del cubata para esa combinación de alcohol y refresco.
+              </p>
+              {selectedMixerProducts.length > 0 && (
+                <div className="tpv-cubata-bulk-supplement">
+                  <label>
+                    <span>Suplemento para todos</span>
+                    <input
+                      min="0"
+                      step="0.10"
+                      type="number"
+                      value={bulkSupplement}
+                      onChange={(event) => setBulkSupplement(event.target.value)}
+                      placeholder="0,00"
+                    />
+                  </label>
+                  <button
+                    className="tpv-button tpv-button-secondary"
+                    type="button"
+                    disabled={savingCubataConfig || bulkSupplement === ""}
+                    onClick={() => {
+                      setAllCubataMixerSupplements(parseSupplementCents(bulkSupplement));
+                      setBulkSupplement("");
+                    }}
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              )}
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCubataMixerDragEnd}>
                 <SortableContext items={selectedMixerIds} strategy={verticalListSortingStrategy}>
                   <div className="tpv-cubata-sort-list">
@@ -1062,7 +1140,12 @@ export default function ProductCrud() {
                       <span className="tpv-ticket-muted">Selecciona refrescos para este alcohol.</span>
                     )}
                     {selectedMixerProducts.map((product) => (
-                      <SortableMixerItem key={product.id} product={product} />
+                      <SortableMixerItem
+                        key={product.id}
+                        product={product}
+                        supplementCents={product.supplementCents}
+                        onSupplementChange={setCubataMixerSupplement}
+                      />
                     ))}
                   </div>
                 </SortableContext>
@@ -1262,7 +1345,7 @@ export default function ProductCrud() {
   );
 }
 
-function SortableMixerItem({ product }) {
+function SortableMixerItem({ product, supplementCents, onSupplementChange }) {
   const {
     attributes,
     listeners,
@@ -1271,10 +1354,21 @@ function SortableMixerItem({ product }) {
     transition,
     isDragging,
   } = useSortable({ id: product.id });
+  const [supplementDraft, setSupplementDraft] = useState(formatSupplementInput(supplementCents ?? 0));
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  useEffect(() => {
+    setSupplementDraft(formatSupplementInput(supplementCents ?? 0));
+  }, [supplementCents]);
+
+  function commitSupplement() {
+    const nextSupplementCents = parseSupplementCents(supplementDraft);
+    setSupplementDraft(formatSupplementInput(nextSupplementCents));
+    onSupplementChange(product.id, nextSupplementCents);
+  }
 
   return (
     <div className={isDragging ? "tpv-cubata-sort-item is-dragging" : "tpv-cubata-sort-item"} ref={setNodeRef} style={style}>
@@ -1289,6 +1383,26 @@ function SortableMixerItem({ product }) {
         <GripVertical aria-hidden="true" size={17} strokeWidth={2.2} />
       </button>
       <strong>{product.name}</strong>
+      {onSupplementChange && (
+        <label className="tpv-cubata-supplement">
+          <span>Suplemento</span>
+          <input
+            min="0"
+            step="0.10"
+            type="number"
+            value={supplementDraft}
+            onChange={(event) => setSupplementDraft(event.target.value)}
+            onBlur={commitSupplement}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              event.target.blur();
+            }}
+            aria-label={`Suplemento de ${product.name}`}
+            placeholder="0,00"
+          />
+        </label>
+      )}
     </div>
   );
 }

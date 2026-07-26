@@ -1,5 +1,9 @@
 import { readSessionToken } from "../../../Backend/auth";
-import { listCubataMixerConfigs, setCubataMixerConfig } from "../../../Backend/cubatas";
+import {
+  listCubataMixerConfigs,
+  listCubataMixerProducts,
+  setCubataMixerConfig,
+} from "../../../Backend/cubatas";
 
 export const runtime = "nodejs";
 
@@ -13,8 +17,11 @@ async function requireAdmin(request) {
 
 export async function GET() {
   try {
-    const configs = await listCubataMixerConfigs();
-    return Response.json({ configs });
+    const [configs, mixerProducts] = await Promise.all([
+      listCubataMixerConfigs(),
+      listCubataMixerProducts(),
+    ]);
+    return Response.json({ configs, mixerProducts });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
@@ -24,7 +31,10 @@ export async function PUT(request) {
   try {
     await requireAdmin(request);
     const payload = await request.json();
-    const configs = await setCubataMixerConfig(payload.alcoholProductId, payload.mixerProductIds);
+    const configs = await setCubataMixerConfig(
+      payload.alcoholProductId,
+      payload.mixers ?? payload.mixerProductIds,
+    );
     return Response.json({ configs });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 400 });
