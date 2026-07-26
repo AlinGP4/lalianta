@@ -3,7 +3,15 @@ services:
     build: .
     ports:
       - "3000:3000"
+    volumes:
+      # Imágenes subidas desde el TPV (popup del QR). Sin este volumen se
+      # pierden en cada redeploy y la base de datos queda apuntando a un
+      # archivo que ya no existe.
+      - lalianta_uploads:/app/public/uploads
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+
+volumes:
+  lalianta_uploads:
