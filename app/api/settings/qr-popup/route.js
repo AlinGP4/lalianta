@@ -1,5 +1,6 @@
 import { readSessionToken } from "../../../../Backend/auth";
 import { clearCustomerQrPopup, getCustomerQrPopup, setCustomerQrPopup } from "../../../../Backend/settings";
+import { buildUploadUrl, getUploadFileName, uploadDirectory } from "../../../../Backend/uploads";
 import { randomUUID } from "crypto";
 import { mkdir, rm, writeFile } from "fs/promises";
 import path from "path";
@@ -7,7 +8,6 @@ import path from "path";
 export const runtime = "nodejs";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const uploadDirectory = path.join(process.cwd(), "public", "uploads");
 
 /**
  * El tipo se decide por los bytes del archivo, no por el mime que declara el
@@ -55,10 +55,11 @@ async function requireAdmin(request) {
 }
 
 async function removeLocalPopupFile(imageUrl) {
-  if (!imageUrl?.startsWith("/uploads/qr-popup-")) return;
+  const fileName = getUploadFileName(imageUrl);
+  if (!fileName.startsWith("qr-popup-")) return;
 
   try {
-    await rm(path.join(process.cwd(), "public", imageUrl), { force: true });
+    await rm(path.join(uploadDirectory, fileName), { force: true });
   } catch {
     // Best effort cleanup only.
   }
@@ -101,7 +102,7 @@ export async function POST(request) {
     await writeFile(path.join(uploadDirectory, fileName), buffer);
     await removeLocalPopupFile(previousPopup.imageUrl);
 
-    const imageUrl = `/uploads/${fileName}`;
+    const imageUrl = buildUploadUrl(fileName);
     const popup = await setCustomerQrPopup({
       fileName: file.name || "popup",
       imageUrl,

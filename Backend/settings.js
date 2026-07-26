@@ -1,4 +1,5 @@
 import { query } from "./db";
+import { normalizeUploadUrl } from "./uploads";
 
 let settingsTableReady = false;
 
@@ -80,10 +81,16 @@ export async function getCustomerQrPopup() {
 
   try {
     const popup = JSON.parse(value);
+    // Las URLs guardadas antes apuntaban a /uploads/...; se reescriben a la
+    // ruta que lee del disco para que sigan cargando sin volver a subirlas.
+    const imageUrl = String(popup.imageUrl || "").startsWith("data:")
+      ? ""
+      : normalizeUploadUrl(popup.imageUrl || "");
+
     return {
-      enabled: Boolean(popup.imageUrl) && !String(popup.imageUrl).startsWith("data:"),
+      enabled: Boolean(imageUrl),
       fileName: popup.fileName || "",
-      imageUrl: String(popup.imageUrl || "").startsWith("data:") ? "" : popup.imageUrl || "",
+      imageUrl,
       mimeType: popup.mimeType || "",
       updatedAt: popup.updatedAt || "",
     };

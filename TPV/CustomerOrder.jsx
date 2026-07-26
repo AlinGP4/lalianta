@@ -1,12 +1,13 @@
 "use client";
 
-import { Banknote, BellRing, Check, CreditCard, Minus, Plus, ReceiptText, ShoppingCart, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Banknote, BellRing, Check, CreditCard, Minus, Plus, ReceiptText, Repeat, ShoppingCart, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCategoryTabs, filterProductsByCategory } from "./catalogCategories";
 import { pruneCartByVisibleProducts, subscribeToCatalogChanges } from "./catalogRealtime";
 import { formatPrice } from "./data";
 
 const TABLE_STORAGE_KEY = "lalianta_customer_table";
+const ACCOUNT_REFRESH_MS = 30000;
 const openAccountStatuses = new Set(["pending", "preparing", "delivered"]);
 
 function getNextSixAmExpiration(now = new Date()) {
@@ -98,6 +99,7 @@ export default function CustomerOrder() {
   const [cubataMixerProducts, setCubataMixerProducts] = useState([]);
   const [categoryList, setCategoryList] = useState([]);
   const [collections, setCollections] = useState([]);
+  const hadOpenOrdersRef = useRef(false);
 
   async function loadProductCatalog({ showLoading = false } = {}) {
     if (showLoading) setProductsLoading(true);
@@ -144,14 +146,7 @@ export default function CustomerOrder() {
     if (!selectedTableNumber) return undefined;
 
     const timeout = window.setTimeout(() => {
-      clearStoredTableNumber();
-      setSelectedTableNumber("");
-      setTableDraft("");
-      setCart([]);
-      setTableOrders([]);
-      setSentCode("");
-      setCubataDraft(null);
-      setTableModalOpen(true);
+      releaseTable();
     }, Math.max(0, getNextSixAmExpiration() - Date.now()));
 
     return () => window.clearTimeout(timeout);
@@ -297,23 +292,67 @@ export default function CustomerOrder() {
     loadTableAccount(selectedTableNumber);
   }, [selectedTableNumber, tableModalOpen]);
 
-  async function loadTableAccount(tableNumberToLoad = selectedTableNumber) {
+  // Refresco en segundo plano para enterarnos de que caja ha cobrado la mesa
+  // sin que el cliente tenga que abrir el ticket.
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (!selectedTableNumber || tableModalOpen) return undefined;
+
+    const interval = window.setInterval(() => {
+      loadTableAccount(selectedTableNumber, { silent: true });
+    }, ACCOUNT_REFRESH_MS);
+
+    return () => window.clearInterval(interval);
+  }, [selectedTableNumber, tableModalOpen]);
+
+  async function loadTableAccount(tableNumberToLoad = selectedTableNumber, { silent = false } = {}) {
     if (!tableNumberToLoad) return;
-    setAccountLoading(true);
+    if (!silent) setAccountLoading(true);
 
     try {
       const response = await fetch(`/api/orders?tableNumber=${tableNumberToLoad}&includeItems=true`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "No se pudo cargar la cuenta de la mesa");
       setTableOrders(data.orders);
+
+      const openOrders = data.orders.filter((order) => openAccountStatuses.has(order.status));
+      // La cuenta tenía pedidos abiertos y ya no queda ninguno: caja ha cobrado
+      // la mesa entera, así que se suelta para poder sentarse en otra.
+      if (hadOpenOrdersRef.current && openOrders.length === 0) {
+        releaseTable("Mesa pagada. Ya puedes elegir otra mesa para seguir pidiendo.");
+      }
+      hadOpenOrdersRef.current = openOrders.length > 0;
     } catch (requestError) {
-      setError(requestError.message);
+      if (!silent) setError(requestError.message);
     } finally {
-      setAccountLoading(false);
+      if (!silent) setAccountLoading(false);
+    }
+  }
+
+  function releaseTable(notice = "") {
+    clearStoredTableNumber();
+    hadOpenOrdersRef.current = false;
+    setSelectedTableNumber("");
+    setTableDraft("");
+    setCart([]);
+    setTableOrders([]);
+    setSentCode("");
+    setCubataDraft(null);
+    setCartOpen(false);
+    setTicketOpen(false);
+    setTableModalOpen(true);
+    setPaymentNotice(notice);
+
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/pedido");
+      if (notice) window.setTimeout(() => setPaymentNotice(""), 4000);
     }
   }
 
   function changeTable(nextTableNumber) {
+    if (nextTableNumber === selectedTableNumber) return;
+
+    hadOpenOrdersRef.current = false;
     setSelectedTableNumber(nextTableNumber);
     setCart([]);
     setTableOrders([]);
@@ -336,6 +375,12 @@ export default function CustomerOrder() {
     storeTableNumber(nextTableNumber);
     setTableModalOpen(false);
     if (qrPopup?.enabled) setQrPopupOpen(true);
+    setError("");
+  }
+
+  function openTablePicker() {
+    setTableDraft(selectedTableNumber);
+    setTableModalOpen(true);
     setError("");
   }
 
@@ -519,7 +564,18 @@ export default function CustomerOrder() {
       <header className="customer-head">
         <div>
           <p className="tpv-kicker">La Lianta</p>
-          <h1>Mesa {selectedTableNumber || "-"}</h1>
+          <button
+            className="customer-table-trigger"
+            type="button"
+            onClick={openTablePicker}
+            aria-label={selectedTableNumber ? `Mesa ${selectedTableNumber}. Cambiar o liberar mesa` : "Seleccionar mesa"}
+          >
+            <h1>Mesa {selectedTableNumber || "-"}</h1>
+            <span>
+              <Repeat aria-hidden="true" size={13} strokeWidth={2.6} />
+              Cambiar
+            </span>
+          </button>
         </div>
         <div className="customer-head-actions">
           <button
@@ -640,8 +696,18 @@ export default function CustomerOrder() {
             <div className="tpv-modal-head">
               <div>
                 <p className="tpv-kicker">La Lianta</p>
-                <h2>Selecciona tu mesa</h2>
+                <h2>{selectedTableNumber ? "Cambiar de mesa" : "Selecciona tu mesa"}</h2>
               </div>
+              {selectedTableNumber && (
+                <button
+                  className="tpv-modal-close"
+                  type="button"
+                  onClick={() => setTableModalOpen(false)}
+                  aria-label="Cerrar"
+                >
+                  <X aria-hidden="true" size={20} strokeWidth={2.2} />
+                </button>
+              )}
             </div>
 
             <div className="tpv-modal-body customer-table-picker">
@@ -661,6 +727,21 @@ export default function CustomerOrder() {
                   ))}
                 </select>
               </label>
+              {selectedTableNumber && (
+                <>
+                  <p className="customer-table-hint">
+                    Si cambias o liberas la mesa se vacía el carrito que no hayas enviado.
+                    Los pedidos ya enviados siguen en la cuenta de la mesa {selectedTableNumber}.
+                  </p>
+                  <button
+                    className="tpv-button tpv-button-secondary customer-table-release"
+                    type="button"
+                    onClick={() => releaseTable("Mesa liberada. Elige otra mesa cuando quieras pedir.")}
+                  >
+                    Liberar mesa
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="tpv-modal-foot">

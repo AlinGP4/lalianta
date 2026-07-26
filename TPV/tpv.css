@@ -3435,6 +3435,32 @@
   letter-spacing: 0;
 }
 
+.customer-table-trigger {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.customer-table-trigger span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--tpv-paper);
+  color: var(--tpv-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 .customer-head-actions {
   display: inline-flex;
   align-items: center;
@@ -3521,6 +3547,18 @@
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.customer-table-hint {
+  margin: var(--tpv-space-3) 0 0;
+  color: var(--tpv-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.customer-table-release {
+  width: 100%;
+  margin-top: var(--tpv-space-2);
 }
 
 .customer-table-picker select {
